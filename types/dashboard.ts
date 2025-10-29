@@ -64,6 +64,6 @@ export interface CustomStyle {
   name: string;
   description: string;
   iconName: string; // Nom de l'icône Lucide (ex: "Sofa", "Bed", "Lamp")
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }

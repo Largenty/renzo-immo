@@ -9,7 +9,8 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import type { TransformationType, CustomStyle } from "@/types/dashboard";
+import type { TransformationType } from "@/types/dashboard";
+import type { CustomStyle } from "@/lib/hooks";
 import * as LucideIcons from "lucide-react";
 
 export interface TransformationOption {
@@ -81,28 +82,33 @@ export const defaultTransformationTypes: TransformationOption[] = [
   },
 ];
 
-// Convertir un CustomStyle en TransformationOption
+// Convertir un CustomStyle (from database) en TransformationOption
 export function customStyleToTransformationOption(
   style: CustomStyle
 ): TransformationOption {
   // Récupérer l'icône dynamiquement
-  const IconComponent = (LucideIcons as any)[style.iconName] || Home;
+  const IconComponent = (LucideIcons as any)[style.icon_name || "Sparkles"] || Sparkles;
 
   return {
-    value: `custom_${style.id}` as TransformationType,
+    value: style.slug as TransformationType,
     label: style.name,
-    description: style.description,
+    description: style.description || "",
     icon: IconComponent,
-    allowFurnitureToggle: true,
+    allowFurnitureToggle: style.allow_furniture_toggle,
     isCustom: true,
   };
 }
 
 // Obtenir tous les types de transformation (built-in + personnalisés)
 export function getAllTransformationTypes(
-  customStyles: CustomStyle[]
+  dbTransformationTypes: CustomStyle[]
 ): TransformationOption[] {
+  // Filtrer pour ne garder QUE les styles custom (is_system = false)
+  // Les styles système sont déjà dans defaultTransformationTypes
+  const customStyles = dbTransformationTypes.filter(style => style.is_system === false);
   const customOptions = customStyles.map(customStyleToTransformationOption);
+
+  // Retourner: styles par défaut hardcodés + styles custom utilisateur
   return [...defaultTransformationTypes, ...customOptions];
 }
 

@@ -1,126 +1,106 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, PageHeader, StatCard } from "@/components/ui";
+import { ProjectCard, EmptyState } from "@/components/projects";
 import Link from "next/link";
-import Image from "next/image";
 import {
   FolderOpen,
   Image as ImageIcon,
-  TrendingUp,
   Clock,
   Plus,
   ArrowRight,
   Sparkles,
 } from "lucide-react";
-
-// Mock data
-const stats = [
-  {
-    name: "Projets actifs",
-    value: "12",
-    icon: FolderOpen,
-    change: "+3 ce mois",
-    changeType: "positive",
-  },
-  {
-    name: "Images générées",
-    value: "248",
-    icon: ImageIcon,
-    change: "+42 ce mois",
-    changeType: "positive",
-  },
-  {
-    name: "Crédits restants",
-    value: "48",
-    icon: Sparkles,
-    change: "sur 100",
-    changeType: "neutral",
-  },
-  {
-    name: "Temps moyen",
-    value: "2m 47s",
-    icon: Clock,
-    change: "-15s ce mois",
-    changeType: "positive",
-  },
-];
-
-const recentProjects = [
-  {
-    id: "1",
-    name: "Villa Moderne - Cannes",
-    address: "45 Boulevard de la Croisette, Cannes",
-    coverImage: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80",
-    totalImages: 12,
-    completedImages: 8,
-    updatedAt: "Il y a 2 heures",
-  },
-  {
-    id: "2",
-    name: "Appartement Haussmannien",
-    address: "28 Avenue Montaigne, Paris",
-    coverImage: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&q=80",
-    totalImages: 8,
-    completedImages: 8,
-    updatedAt: "Il y a 5 heures",
-  },
-  {
-    id: "3",
-    name: "Loft Industriel",
-    address: "12 Rue de la République, Lyon",
-    coverImage: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&q=80",
-    totalImages: 15,
-    completedImages: 6,
-    updatedAt: "Hier",
-  },
-];
+import { useProjects } from "@/lib/hooks/use-projects";
+import { useCreditStats } from "@/lib/hooks/use-credits";
+import { useMemo, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { useAuthStore } from "@/lib/stores/auth-store";
 
 export default function DashboardPage() {
+  const { isInitialized, user } = useAuthStore();
+
+  // Charger les données réelles seulement si l'auth est initialisée ET qu'on a un user
+  const shouldFetch = isInitialized && !!user;
+
+  console.log('🎯 Dashboard render - isInitialized:', isInitialized, 'user:', !!user, 'shouldFetch:', shouldFetch);
+
+  const { data: projects = [], isLoading: isLoadingProjects } = useProjects(shouldFetch);
+  const { data: creditStats, isLoading: isLoadingCredits } = useCreditStats();
+
+  // Calculer les stats
+  const stats = useMemo(() => {
+    const totalProjects = projects.length;
+    const totalImages = projects.reduce((sum, p) => sum + (p.total_images || 0), 0);
+    const completedImages = projects.reduce((sum, p) => sum + (p.completed_images || 0), 0);
+
+    return [
+      {
+        name: "Projets actifs",
+        value: totalProjects.toString(),
+        icon: FolderOpen,
+        change: `${totalProjects} au total`,
+        changeType: "neutral" as const,
+      },
+      {
+        name: "Images générées",
+        value: completedImages.toString(),
+        icon: ImageIcon,
+        change: `${totalImages} au total`,
+        changeType: "positive" as const,
+      },
+      {
+        name: "Crédits restants",
+        value: creditStats?.total_remaining?.toString() || "0",
+        icon: Sparkles,
+        change: creditStats?.total_purchased ? `sur ${creditStats.total_purchased}` : "Aucun achat",
+        changeType: "neutral" as const,
+      },
+      {
+        name: "Temps moyen",
+        value: "2m 47s",
+        icon: Clock,
+        change: "par image",
+        changeType: "neutral" as const,
+      },
+    ];
+  }, [projects, creditStats]);
+
+  // Prendre les 3 projets les plus récents
+  const recentProjects = useMemo(() => {
+    return projects.slice(0, 3);
+  }, [projects]);
+
+  const isLoading = isLoadingProjects || isLoadingCredits;
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Tableau de bord</h1>
-          <p className="text-slate-600 mt-1">
-            Bienvenue sur votre espace de travail
-          </p>
-        </div>
-        <Link href="/dashboard/projects/new">
-          <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 btn-glow">
-            <Plus size={20} className="mr-2" />
-            Nouveau projet
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Tableau de bord"
+        description="Bienvenue sur votre espace de travail"
+        action={
+          <Link href="/dashboard/projects/new">
+            <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 btn-glow">
+              <Plus size={20} className="mr-2" />
+              Nouveau projet
+            </Button>
+          </Link>
+        }
+      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => (
-          <Card key={stat.name} className="modern-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-md bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                <stat.icon className="text-white" size={20} />
-              </div>
-              {stat.changeType === "positive" && (
-                <TrendingUp size={16} className="text-green-600" />
-              )}
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-slate-600 font-medium">{stat.name}</p>
-              <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
-              <p
-                className={`text-xs font-medium ${
-                  stat.changeType === "positive"
-                    ? "text-green-600"
-                    : "text-slate-500"
-                }`}
-              >
-                {stat.change}
-              </p>
-            </div>
-          </Card>
+          <StatCard
+            key={stat.name}
+            name={stat.name}
+            value={stat.value}
+            icon={stat.icon}
+            change={stat.change}
+            changeType={stat.changeType}
+            loading={isLoading}
+          />
         ))}
       </div>
 
@@ -136,57 +116,39 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {recentProjects.map((project) => (
-            <Link key={project.id} href={`/dashboard/projects/${project.id}`}>
-              <Card className="modern-card overflow-hidden group cursor-pointer">
-                {/* Cover Image */}
-                <div className="relative h-48 bg-slate-100 overflow-hidden">
-                  <Image
-                    src={project.coverImage}
-                    alt={project.name}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-slate-900/0 to-transparent" />
-
-                  {/* Progress badge */}
-                  <div className="absolute top-3 right-3 px-3 py-1 glass text-xs font-semibold text-slate-900">
-                    {project.completedImages}/{project.totalImages} images
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-6">
-                  <h3 className="text-lg font-bold text-slate-900 mb-1 group-hover:text-blue-600 transition-colors">
-                    {project.name}
-                  </h3>
-                  <p className="text-sm text-slate-600 mb-4">{project.address}</p>
-
-                  {/* Progress bar */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-600 font-medium">Progression</span>
-                      <span className="text-slate-900 font-semibold">
-                        {Math.round((project.completedImages / project.totalImages) * 100)}%
-                      </span>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-sm overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-300"
-                        style={{
-                          width: `${(project.completedImages / project.totalImages) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500">{project.updatedAt}</p>
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        {isLoadingProjects ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <StatCard key={i} name="" value="" icon={FolderOpen} loading />
+            ))}
+          </div>
+        ) : recentProjects.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recentProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                id={project.id}
+                name={project.name}
+                address={project.address}
+                coverImageUrl={project.cover_image_url}
+                totalImages={project.total_images || 0}
+                completedImages={project.completed_images || 0}
+                updatedAt={project.updated_at}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={FolderOpen}
+            title="Aucun projet"
+            description="Créez votre premier projet pour commencer"
+            action={{
+              label: "Créer un projet",
+              onClick: () => window.location.href = '/dashboard/projects/new',
+            }}
+            className="col-span-full"
+          />
+        )}
       </div>
 
       {/* Quick Actions */}

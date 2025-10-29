@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { Toaster } from "sonner";
-import { Navbar } from "@/components/layout/navbar";
-import { Footer } from "@/components/layout/footer";
+import { AuthProvider } from "@/components/providers/auth-provider";
+import { QueryProvider } from "@/components/providers/query-provider";
 import { SEO_CONFIG, JSON_LD_ORGANIZATION, JSON_LD_PRODUCT } from "@/config/seo";
+import { ConditionalLayout } from "@/components/layout/conditional-layout";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -44,10 +45,12 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans">
-        <Navbar />
-        <main className="min-h-screen">{children}</main>
-        <Footer />
-        <Toaster position="bottom-right" />
+        <QueryProvider>
+          <AuthProvider>
+            <ConditionalLayout>{children}</ConditionalLayout>
+            <Toaster position="bottom-right" />
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

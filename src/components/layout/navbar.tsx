@@ -4,12 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { gsap } from "@/lib/gsap-utils";
-import { Menu, X } from "lucide-react";
+import { Menu, X, User, LogOut } from "lucide-react";
+import { useUser, useIsAuthenticated } from "@/lib/stores/auth-store";
+import { LogoutModal } from "@/components/modals/logout-modal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function Navbar() {
   const navRef = useRef<HTMLElement>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const user = useUser();
+  const isAuthenticated = useIsAuthenticated();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -55,9 +68,66 @@ export function Navbar() {
           <a href="#contact" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
             Contact
           </a>
-          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-            Tester gratuitement
-          </Button>
+
+          {isAuthenticated ? (
+            <>
+              <Link href="/dashboard">
+                <Button variant="ghost" size="sm" className="text-gray-700 hover:text-gray-900">
+                  Dashboard
+                </Button>
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    <User size={16} />
+                    {user?.first_name || "Mon compte"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col">
+                      <span className="font-semibold">
+                        {user?.first_name} {user?.last_name}
+                      </span>
+                      <span className="text-xs text-gray-500">{user?.email}</span>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/settings" className="cursor-pointer">
+                      Paramètres
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/credits" className="cursor-pointer">
+                      Crédits ({user?.credits_balance || 0})
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setLogoutModalOpen(true)}
+                    className="text-red-600 cursor-pointer"
+                  >
+                    <LogOut size={16} className="mr-2" />
+                    Se déconnecter
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          ) : (
+            <>
+              <Link href="/auth/login">
+                <Button variant="ghost" size="sm" className="text-gray-700 hover:text-gray-900">
+                  Se connecter
+                </Button>
+              </Link>
+              <Link href="/auth/signup">
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Commencer gratuitement
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile menu button */}
@@ -82,12 +152,50 @@ export function Navbar() {
             <a href="#contact" className="block py-2 text-sm font-medium text-gray-600">
               Contact
             </a>
-            <Button size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-              Tester gratuitement
-            </Button>
+            <div className="pt-2 space-y-2">
+              {isAuthenticated ? (
+                <>
+                  <Link href="/dashboard" className="block">
+                    <Button variant="outline" size="sm" className="w-full">
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard/settings" className="block">
+                    <Button variant="outline" size="sm" className="w-full">
+                      Paramètres
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-red-600"
+                    onClick={() => setLogoutModalOpen(true)}
+                  >
+                    <LogOut size={16} className="mr-2" />
+                    Se déconnecter
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link href="/auth/login" className="block">
+                    <Button variant="outline" size="sm" className="w-full">
+                      Se connecter
+                    </Button>
+                  </Link>
+                  <Link href="/auth/signup" className="block">
+                    <Button size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                      Commencer gratuitement
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
+
+      {/* Logout Modal */}
+      <LogoutModal isOpen={logoutModalOpen} onClose={() => setLogoutModalOpen(false)} />
     </nav>
   );
 }

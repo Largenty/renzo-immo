@@ -21,12 +21,16 @@ import {
   Home,
   ArrowRight,
   MoreHorizontal,
+  Loader2,
 } from "lucide-react";
 import type { TransformationType, RoomType } from "@/types/dashboard";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useStyles } from "@/contexts/styles-context";
+import { useAllTransformationTypes } from "@/lib/hooks";
+import { useAuthStore } from "@/lib/stores/auth-store";
 import { getAllTransformationTypes } from "@/lib/transformation-types";
+import { compressImage, isValidImageFile, isFileSizeValid, formatFileSize } from "@/lib/image-utils";
+import { toast } from "sonner";
 
 interface UploadedFile {
   id: string;
@@ -41,6 +45,7 @@ interface UploadedFile {
 
 interface ImageUploaderProps {
   onUploadComplete?: (files: UploadedFile[]) => void;
+  isUploading?: boolean;
 }
 
 // Room types with icons
@@ -56,9 +61,15 @@ const roomTypes = [
   { value: "autre" as RoomType, label: "Autre", icon: MoreHorizontal },
 ];
 
-export function ImageUploader({ onUploadComplete }: ImageUploaderProps) {
-  const { styles: customStyles } = useStyles();
-  const transformationTypes = getAllTransformationTypes(customStyles);
+export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUploaderProps) {
+  // Auth state
+  const { isInitialized, user } = useAuthStore();
+  const shouldFetch = isInitialized && !!user;
+
+  // Fetch transformation types from database
+  const { data: dbTransformationTypes = [] } = useAllTransformationTypes(shouldFetch);
+  const transformationTypes = getAllTransformationTypes(dbTransformationTypes);
+
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [step, setStep] = useState<"upload" | "configure">("upload");
@@ -90,17 +101,92 @@ export function ImageUploader({ onUploadComplete }: ImageUploaderProps) {
     processFiles(selectedFiles);
   }, []);
 
-  const processFiles = (newFiles: File[]) => {
-    const uploadedFiles: UploadedFile[] = newFiles.map((file) => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file,
-      preview: URL.createObjectURL(file),
-      transformationType: "depersonnalisation",
-    }));
+  const processFiles = async (newFiles: File[]) => {
+    // Valider les fichiers
+    const validFiles = newFiles.filter((file) => {
+      if (!isValidImageFile(file)) {
+        toast.error(`Format invalide: ${file.name}`, {
+          description: "Formats acceptés : JPG, PNG, WebP",
+        });
+        return false;
+      }
 
-    setFiles((prev) => [...prev, ...uploadedFiles]);
-    if (uploadedFiles.length > 0) {
-      setStep("configure");
+      if (!isFileSizeValid(file, 10)) {
+        toast.error(`Fichier trop volumineux: ${file.name}`, {
+          description: `Taille: ${formatFileSize(file.size)}. Maximum: 10 MB`,
+        });
+        return false;
+      }
+
+      return true;
+    });
+
+    if (validFiles.length === 0) return;
+
+    // Afficher un toast de progression
+    const toastId = toast.loading(
+      `Compression de ${validFiles.length} image${validFiles.length > 1 ? 's' : ''}...`,
+      { duration: Infinity }
+    );
+
+    try {
+      // Compresser les images en parallèle
+      const compressionResults = await Promise.all(
+        validFiles.map(async (file) => {
+          try {
+            // Compresser l'image
+            const compressed = await compressImage(file, {
+              maxWidth: 1920,
+              maxHeight: 1080,
+              quality: 0.85,
+              format: 'jpeg',
+            });
+
+            console.log(
+              `✅ ${file.name}: ${formatFileSize(compressed.originalSize)} → ${formatFileSize(compressed.compressedSize)} (${compressed.compressionRatio}% réduit)`
+            );
+
+            return {
+              id: Math.random().toString(36).substr(2, 9),
+              file: compressed.file,
+              preview: URL.createObjectURL(compressed.file),
+              transformationType: "depersonnalisation" as TransformationType,
+              originalSize: compressed.originalSize,
+              compressedSize: compressed.compressedSize,
+            };
+          } catch (error) {
+            console.error(`❌ Erreur compression ${file.name}:`, error);
+            // Utiliser l'original si la compression échoue
+            return {
+              id: Math.random().toString(36).substr(2, 9),
+              file,
+              preview: URL.createObjectURL(file),
+              transformationType: "depersonnalisation" as TransformationType,
+            };
+          }
+        })
+      );
+
+      setFiles((prev) => [...prev, ...compressionResults]);
+
+      // Toast de succès
+      toast.success(
+        `${validFiles.length} image${validFiles.length > 1 ? 's' : ''} prête${validFiles.length > 1 ? 's' : ''}`,
+        {
+          id: toastId,
+          description: `Taille optimisée pour un upload rapide`,
+        }
+      );
+
+      if (compressionResults.length > 0) {
+        setStep("configure");
+      }
+    } catch (error) {
+      console.error('Erreur lors du traitement des fichiers:', error);
+      toast.error("Erreur lors du traitement", {
+        id: toastId,
+        description: "Certains fichiers n'ont pas pu être traités",
+      });
     }
   };
 
@@ -324,50 +410,105 @@ export function ImageUploader({ onUploadComplete }: ImageUploaderProps) {
                     Type de transformation pour {files.length === 1 ? "cette photo" : "toutes les photos"}
                   </Label>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {transformationTypes.map((type) => {
-                      const Icon = type.icon;
-                      const isSelected = files[0]?.transformationType === type.value;
+                  {/* Styles par défaut */}
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 mb-3">Styles par défaut</p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {transformationTypes.filter(t => !t.isCustom).map((type) => {
+                        const Icon = type.icon;
+                        const isSelected = files[0]?.transformationType === type.value;
 
-                      return (
-                        <button
-                          key={type.value}
-                          onClick={() => applyBulkTransformationType(type.value)}
-                          className={`relative p-4 rounded-md border-2 text-left transition-all ${
-                            isSelected
-                              ? "border-blue-500 bg-blue-50 shadow-md"
-                              : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
-                          }`}
-                        >
-                          <div className="flex gap-4">
-                            <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
-                              isSelected ? "bg-blue-500" : "bg-slate-100"
-                            }`}>
-                              <Icon
-                                size={24}
-                                className={isSelected ? "text-white" : "text-slate-600"}
-                              />
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-slate-900 leading-tight mb-1">
-                                {type.label}
-                              </p>
-                              <p className="text-xs text-slate-600 leading-relaxed">
-                                {type.description}
-                              </p>
-                            </div>
-
-                            {isSelected && (
-                              <div className="w-6 h-6 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0 self-start">
-                                <Check className="text-white" size={16} />
+                        return (
+                          <button
+                            key={type.value}
+                            onClick={() => applyBulkTransformationType(type.value)}
+                            className={`relative p-4 rounded-md border-2 text-left transition-all ${
+                              isSelected
+                                ? "border-blue-500 bg-blue-50 shadow-md"
+                                : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
+                            }`}
+                          >
+                            <div className="flex gap-4">
+                              <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
+                                isSelected ? "bg-blue-500" : "bg-slate-100"
+                              }`}>
+                                <Icon
+                                  size={24}
+                                  className={isSelected ? "text-white" : "text-slate-600"}
+                                />
                               </div>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
+
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-slate-900 leading-tight mb-1">
+                                  {type.label}
+                                </p>
+                                <p className="text-xs text-slate-600 leading-relaxed">
+                                  {type.description}
+                                </p>
+                              </div>
+
+                              {isSelected && (
+                                <div className="w-6 h-6 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0 self-start">
+                                  <Check className="text-white" size={16} />
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {/* Styles personnalisés */}
+                  {transformationTypes.filter(t => t.isCustom).length > 0 && (
+                    <div className="pt-4 border-t border-slate-200">
+                      <p className="text-sm font-semibold text-slate-700 mb-3">Mes styles personnalisés</p>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {transformationTypes.filter(t => t.isCustom).map((type) => {
+                          const Icon = type.icon;
+                          const isSelected = files[0]?.transformationType === type.value;
+
+                          return (
+                            <button
+                              key={type.value}
+                              onClick={() => applyBulkTransformationType(type.value)}
+                              className={`relative p-4 rounded-md border-2 text-left transition-all ${
+                                isSelected
+                                  ? "border-blue-500 bg-blue-50 shadow-md"
+                                  : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
+                              }`}
+                            >
+                              <div className="flex gap-4">
+                                <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
+                                  isSelected ? "bg-blue-500" : "bg-gradient-to-br from-blue-500 to-indigo-500"
+                                }`}>
+                                  <Icon
+                                    size={24}
+                                    className="text-white"
+                                  />
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-slate-900 leading-tight mb-1">
+                                    {type.label}
+                                  </p>
+                                  <p className="text-xs text-slate-600 leading-relaxed">
+                                    {type.description}
+                                  </p>
+                                </div>
+
+                                {isSelected && (
+                                  <div className="w-6 h-6 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0 self-start">
+                                    <Check className="text-white" size={16} />
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Furniture Toggle (only if type allows it) */}
                   {(() => {
@@ -556,50 +697,105 @@ export function ImageUploader({ onUploadComplete }: ImageUploaderProps) {
                         Type de transformation
                       </Label>
 
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        {transformationTypes.map((type) => {
-                          const Icon = type.icon;
-                          const isSelected = uploadedFile.transformationType === type.value;
+                      {/* Styles par défaut */}
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 mb-3">Styles par défaut</p>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          {transformationTypes.filter(t => !t.isCustom).map((type) => {
+                            const Icon = type.icon;
+                            const isSelected = uploadedFile.transformationType === type.value;
 
-                          return (
-                            <button
-                              key={type.value}
-                              onClick={() => updateTransformationType(uploadedFile.id, type.value)}
-                              className={`relative p-4 rounded-md border-2 text-left transition-all ${
-                                isSelected
-                                  ? "border-blue-500 bg-blue-50 shadow-md"
-                                  : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
-                              }`}
-                            >
-                              <div className="flex gap-4">
-                                <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
-                                  isSelected ? "bg-blue-500" : "bg-slate-100"
-                                }`}>
-                                  <Icon
-                                    size={24}
-                                    className={isSelected ? "text-white" : "text-slate-600"}
-                                  />
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-bold text-slate-900 leading-tight mb-1">
-                                    {type.label}
-                                  </p>
-                                  <p className="text-xs text-slate-600 leading-relaxed">
-                                    {type.description}
-                                  </p>
-                                </div>
-
-                                {isSelected && (
-                                  <div className="w-6 h-6 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0 self-start">
-                                    <Check className="text-white" size={16} />
+                            return (
+                              <button
+                                key={type.value}
+                                onClick={() => updateTransformationType(uploadedFile.id, type.value)}
+                                className={`relative p-4 rounded-md border-2 text-left transition-all ${
+                                  isSelected
+                                    ? "border-blue-500 bg-blue-50 shadow-md"
+                                    : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
+                                }`}
+                              >
+                                <div className="flex gap-4">
+                                  <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
+                                    isSelected ? "bg-blue-500" : "bg-slate-100"
+                                  }`}>
+                                    <Icon
+                                      size={24}
+                                      className={isSelected ? "text-white" : "text-slate-600"}
+                                    />
                                   </div>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
+
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-slate-900 leading-tight mb-1">
+                                      {type.label}
+                                    </p>
+                                    <p className="text-xs text-slate-600 leading-relaxed">
+                                      {type.description}
+                                    </p>
+                                  </div>
+
+                                  {isSelected && (
+                                    <div className="w-6 h-6 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0 self-start">
+                                      <Check className="text-white" size={16} />
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
+
+                      {/* Styles personnalisés */}
+                      {transformationTypes.filter(t => t.isCustom).length > 0 && (
+                        <div className="pt-4 border-t border-slate-200">
+                          <p className="text-sm font-semibold text-slate-700 mb-3">Mes styles personnalisés</p>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            {transformationTypes.filter(t => t.isCustom).map((type) => {
+                              const Icon = type.icon;
+                              const isSelected = uploadedFile.transformationType === type.value;
+
+                              return (
+                                <button
+                                  key={type.value}
+                                  onClick={() => updateTransformationType(uploadedFile.id, type.value)}
+                                  className={`relative p-4 rounded-md border-2 text-left transition-all ${
+                                    isSelected
+                                      ? "border-blue-500 bg-blue-50 shadow-md"
+                                      : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
+                                  }`}
+                                >
+                                  <div className="flex gap-4">
+                                    <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
+                                      isSelected ? "bg-blue-500" : "bg-gradient-to-br from-blue-500 to-indigo-500"
+                                    }`}>
+                                      <Icon
+                                        size={24}
+                                        className="text-white"
+                                      />
+                                    </div>
+
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-bold text-slate-900 leading-tight mb-1">
+                                        {type.label}
+                                      </p>
+                                      <p className="text-xs text-slate-600 leading-relaxed">
+                                        {type.description}
+                                      </p>
+                                    </div>
+
+                                    {isSelected && (
+                                      <div className="w-6 h-6 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0 self-start">
+                                        <Check className="text-white" size={16} />
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Furniture Toggle (only if type allows it) */}
@@ -726,15 +922,26 @@ export function ImageUploader({ onUploadComplete }: ImageUploaderProps) {
                 setStep("upload");
               }}
               className="flex-1"
+              disabled={isUploading}
             >
               Annuler
             </Button>
             <Button
               onClick={handleSubmit}
               className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 btn-glow"
+              disabled={isUploading}
             >
-              <Check size={16} className="mr-2" />
-              Ajouter {files.length} photo{files.length > 1 ? "s" : ""} au projet
+              {isUploading ? (
+                <>
+                  <Loader2 size={16} className="mr-2 animate-spin" />
+                  Ajout en cours...
+                </>
+              ) : (
+                <>
+                  <Check size={16} className="mr-2" />
+                  Ajouter {files.length} photo{files.length > 1 ? "s" : ""} au projet
+                </>
+              )}
             </Button>
           </div>
         </>
