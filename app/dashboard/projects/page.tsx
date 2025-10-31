@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthStore } from "@/lib/stores/auth-store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useProjects, useDeleteProject } from "@/lib/hooks";
+import { useAuthStore, useProjectsStore } from "@/lib/stores";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -59,25 +58,20 @@ function ProjectCardSkeleton() {
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const { isInitialized, user } = useAuthStore();
+  const { user } = useAuthStore();
+  const { projects, isLoading, error, fetchProjects, deleteProject } = useProjectsStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
-  // Charger les projets seulement si l'auth est initialisée
-  const shouldFetch = isInitialized && !!user;
-  const { data: projects = [], isLoading, isError, error, refetch } = useProjects(shouldFetch);
-  const deleteProject = useDeleteProject();
-
-  console.log('📂 Projects page - shouldFetch:', shouldFetch, 'projects:', projects.length);
-
-  // Refetch les projets quand la page se monte (pour récupérer les nouveaux projets)
+  // Charger les projets au montage
   useEffect(() => {
-    if (shouldFetch) {
-      console.log('🔄 Refetching projects on mount...');
-      refetch();
+    if (user?.id) {
+      fetchProjects(user.id);
     }
-  }, [shouldFetch, refetch]);
+  }, [user?.id, fetchProjects]);
+
+  const isError = !!error;
 
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
@@ -89,10 +83,9 @@ export default function ProjectsPage() {
   }, [projects, searchQuery]);
 
   // Formater la date relative
-  const getRelativeTime = (date: string) => {
+  const getRelativeTime = (date: Date) => {
     const now = new Date();
-    const updatedAt = new Date(date);
-    const diffInMs = now.getTime() - updatedAt.getTime();
+    const diffInMs = now.getTime() - date.getTime();
     const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
     const diffInDays = Math.floor(diffInHours / 24);
 
@@ -100,7 +93,7 @@ export default function ProjectsPage() {
     if (diffInHours < 24) return `Il y a ${diffInHours} heure${diffInHours > 1 ? "s" : ""}`;
     if (diffInDays === 1) return "Hier";
     if (diffInDays < 7) return `Il y a ${diffInDays} jours`;
-    return new Date(date).toLocaleDateString("fr-FR");
+    return date.toLocaleDateString("fr-FR");
   };
 
   const handleDeleteClick = (projectId: string) => {
@@ -110,7 +103,7 @@ export default function ProjectsPage() {
 
   const handleDeleteConfirm = async () => {
     if (projectToDelete) {
-      await deleteProject.mutateAsync(projectToDelete);
+      await deleteProject(projectToDelete);
       setDeleteDialogOpen(false);
       setProjectToDelete(null);
     }
@@ -167,7 +160,7 @@ export default function ProjectsPage() {
               Erreur de chargement
             </h3>
             <p className="text-red-700 mb-4">
-              {error?.message || "Une erreur est survenue lors du chargement des projets."}
+              {error || "Une erreur est survenue lors du chargement des projets."}
             </p>
             <Button
               onClick={() => window.location.reload()}
@@ -219,8 +212,8 @@ export default function ProjectsPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProjects.map((project) => {
-                const totalImages = project.total_images || 0;
-                const completedImages = project.completed_images || 0;
+                const totalImages = project.totalImages || 0;
+                const completedImages = project.completedImages || 0;
                 const hasImages = totalImages > 0;
                 const progress = hasImages ? (completedImages / totalImages) * 100 : 0;
 
@@ -232,10 +225,10 @@ export default function ProjectsPage() {
                     {/* Cover Image */}
                     <Link href={`/dashboard/projects/${project.id}`}>
                       <div className="relative h-48 bg-slate-100 overflow-hidden cursor-pointer">
-                        {project.cover_image_url ? (
+                        {project.coverImageUrl ? (
                           <>
                             <Image
-                              src={project.cover_image_url}
+                              src={project.coverImageUrl}
                               alt={project.name}
                               fill
                               className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -245,7 +238,7 @@ export default function ProjectsPage() {
                           </>
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <FolderOpen size={48} className="text-slate-300 group-hover:text-white transition-colors" />
+                            <FolderOpen size={48} className="text-slate-300 transition-colors" />
                           </div>
                         )}
 
@@ -263,55 +256,14 @@ export default function ProjectsPage() {
                           </div>
                         )}
 
-                        {/* Actions */}
-                        <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="glass hover:bg-white/90"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                }}
-                              >
-                                <MoreVertical size={16} />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleEditClick(project.id);
-                                }}
-                              >
-                                <Edit size={16} className="mr-2" />
-                                Modifier
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDeleteClick(project.id);
-                                }}
-                                className="text-red-600 focus:text-red-600"
-                              >
-                                <Trash2 size={16} className="mr-2" />
-                                Supprimer
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+
                       </div>
                     </Link>
 
                     {/* Content */}
                     <div className="p-6">
                       <Link href={`/dashboard/projects/${project.id}`}>
-                        <h3 className="text-lg font-bold text-slate-900 mb-1 group-hover:text-white transition-colors cursor-pointer">
+                        <h3 className="text-lg font-bold text-slate-900 mb-1 transition-colors cursor-pointer">
                           {project.name}
                         </h3>
                       </Link>
@@ -341,7 +293,7 @@ export default function ProjectsPage() {
 
                       {/* Footer */}
                       <div className="flex items-center justify-between text-xs text-slate-500 pt-4 border-t border-slate-100">
-                        <span>{getRelativeTime(project.updated_at)}</span>
+                        <span>{getRelativeTime(project.updatedAt)}</span>
                         <span>
                           {totalImages > 0
                             ? `${totalImages} image${totalImages > 1 ? "s" : ""}`

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { logger } from '@/lib/logger';
 import {
   ArrowLeft,
   Search,
@@ -157,7 +158,7 @@ export default function CreditsHistoryPage() {
 
   const handleExport = () => {
     // Export logic here
-    console.log("Exporting data...");
+    logger.debug("Exporting data...");
   };
 
   return (

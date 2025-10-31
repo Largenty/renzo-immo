@@ -8,6 +8,7 @@ export { ImageGridCard } from "./molecules/image-grid-card";
 export { ImageViewerDialog } from "./molecules/image-viewer-dialog";
 export { DeleteConfirmDialog } from "./molecules/delete-confirm-dialog";
 export { DeleteProjectDialog } from "./molecules/delete-project-dialog";
+export { ProjectCoverBanner } from "./molecules/project-cover-banner";
 
 // Organisms & Complex Components
 export { ProjectHeader } from './project-header';

@@ -10,7 +10,7 @@ import {
   Button,
 } from "@/components/ui";
 import { Download } from "lucide-react";
-import type { Image as ImageType } from "@/lib/hooks";
+import type { Image as ImageType } from "@/domain/images";
 
 /**
  * Props pour le composant ImageViewerDialog
@@ -38,7 +38,7 @@ export function ImageViewerDialog({
   if (!image) return null;
 
   return (
-    <Dialog open={!!image} onOpenChange={onClose}>
+    <Dialog open={!!image} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
@@ -53,7 +53,7 @@ export function ImageViewerDialog({
             <p className="text-sm font-semibold text-slate-600 mb-2">Avant</p>
             <div className="relative h-[400px] rounded-md overflow-hidden bg-slate-100">
               <Image
-                src={image.original_url}
+                src={image.originalUrl}
                 alt="Original"
                 fill
                 className="object-contain"
@@ -65,9 +65,9 @@ export function ImageViewerDialog({
           <div>
             <p className="text-sm font-semibold text-slate-600 mb-2">Après</p>
             <div className="relative h-[400px] rounded-md overflow-hidden bg-slate-100">
-              {image.transformed_url && (
+              {image.transformedUrl && (
                 <Image
-                  src={image.transformed_url}
+                  src={image.transformedUrl}
                   alt="Transformé"
                   fill
                   className="object-contain"
@@ -84,7 +84,7 @@ export function ImageViewerDialog({
             className="flex-1"
             onClick={() => {
               const filename = `${projectName}-original-${Date.now()}.png`;
-              onDownload(image.original_url, filename);
+              onDownload(image.originalUrl, filename);
             }}
           >
             <Download size={16} className="mr-2" />
@@ -93,12 +93,12 @@ export function ImageViewerDialog({
           <Button
             className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600"
             onClick={() => {
-              if (image.transformed_url) {
+              if (image.transformedUrl) {
                 const filename = `${projectName}-${transformationLabel}-${Date.now()}.png`;
-                onDownload(image.transformed_url, filename);
+                onDownload(image.transformedUrl, filename);
               }
             }}
-            disabled={!image.transformed_url}
+            disabled={!image.transformedUrl}
           >
             <Download size={16} className="mr-2" />
             Télécharger la transformée

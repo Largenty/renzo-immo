@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { User, Mail, Building2, Phone, MapPin } from "lucide-react";
+import { User, Mail, Building2, Phone, MapPin, Save } from "lucide-react";
 
 export interface ProfileFormData {
   firstName: string;
@@ -21,11 +21,13 @@ export interface ProfileFormData {
 interface ProfileSettingsSectionProps {
   initialData?: ProfileFormData;
   onSave?: (data: ProfileFormData) => void;
+  isSaving?: boolean;
 }
 
 export function ProfileSettingsSection({
   initialData,
   onSave,
+  isSaving = false,
 }: ProfileSettingsSectionProps) {
   const [formData, setFormData] = useState<ProfileFormData>({
     firstName: initialData?.firstName || "",
@@ -38,6 +40,12 @@ export function ProfileSettingsSection({
 
   const handleChange = (field: keyof ProfileFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handlePhoneChange = (value: string) => {
+    // Permettre seulement les chiffres, espaces, +, -, (, )
+    const cleanValue = value.replace(/[^\d\s+\-()]/g, '');
+    setFormData((prev) => ({ ...prev, phone: cleanValue }));
   };
 
   return (
@@ -73,6 +81,9 @@ export function ProfileSettingsSection({
               value={formData.firstName}
               onChange={(e) => handleChange("firstName", e.target.value)}
               placeholder="Votre prénom"
+              minLength={2}
+              maxLength={50}
+              required
             />
           </div>
 
@@ -83,6 +94,9 @@ export function ProfileSettingsSection({
               value={formData.lastName}
               onChange={(e) => handleChange("lastName", e.target.value)}
               placeholder="Votre nom"
+              minLength={2}
+              maxLength={50}
+              required
             />
           </div>
 
@@ -100,8 +114,13 @@ export function ProfileSettingsSection({
                 onChange={(e) => handleChange("email", e.target.value)}
                 className="pl-10"
                 placeholder="votre@email.com"
+                disabled
+                title="L'email ne peut pas être modifié ici. Contactez le support pour changer votre email."
               />
             </div>
+            <p className="text-xs text-slate-500">
+              L'email ne peut pas être modifié
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -115,9 +134,11 @@ export function ProfileSettingsSection({
                 id="phone"
                 type="tel"
                 value={formData.phone}
-                onChange={(e) => handleChange("phone", e.target.value)}
+                onChange={(e) => handlePhoneChange(e.target.value)}
                 className="pl-10"
-                placeholder="+33 6 XX XX XX XX"
+                placeholder="+33 6 12 34 56 78"
+                pattern="[\d\s+\-()]+"
+                title="Format: +33 6 12 34 56 78"
               />
             </div>
           </div>
@@ -135,6 +156,7 @@ export function ProfileSettingsSection({
                 onChange={(e) => handleChange("company", e.target.value)}
                 className="pl-10"
                 placeholder="Nom de votre société"
+                maxLength={100}
               />
             </div>
           </div>
@@ -152,9 +174,30 @@ export function ProfileSettingsSection({
                 onChange={(e) => handleChange("address", e.target.value)}
                 className="pl-10 min-h-[80px]"
                 placeholder="Votre adresse complète"
+                maxLength={500}
               />
             </div>
           </div>
+        </div>
+
+        <Separator />
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={() => onSave?.(formData)}
+            disabled={isSaving}
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+          >
+            {isSaving ? (
+              "Enregistrement..."
+            ) : (
+              <>
+                <Save size={18} className="mr-2" />
+                Enregistrer les modifications
+              </>
+            )}
+          </Button>
         </div>
       </div>
     </Card>

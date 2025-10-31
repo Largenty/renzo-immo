@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter, useParams } from "next/navigation";
-import { useProject, useUpdateProject } from "@/lib/hooks";
+import { useProject, useUpdateProject } from "@/domain/projects";
+import { useCurrentUser } from "@/domain/auth";
 import {
   ProjectForm,
   type ProjectFormData,
@@ -9,29 +10,37 @@ import {
 import { EditProjectHeader } from "@/components/projects/molecules/edit-project-header";
 import { EditProjectLoadingState } from "@/components/projects/molecules/edit-project-loading-state";
 import { ProjectNotFound } from "@/components/projects/project-not-found";
+import { logger } from '@/lib/logger';
 
 export default function EditProjectPage() {
   const router = useRouter();
   const params = useParams();
   const projectId = params.id as string;
+  const { data: user } = useCurrentUser();
 
-  const { data: project, isLoading: isLoadingProject } = useProject(projectId);
-  const updateProjectMutation = useUpdateProject();
+  const { data: project, isLoading: isLoadingProject } = useProject(user?.id, projectId);
+  const updateProjectMutation = useUpdateProject(user?.id);
 
   const handleSubmit = async (data: ProjectFormData, coverImage: File | null) => {
+    if (!user?.id) {
+      logger.error("❌ No user ID");
+      return;
+    }
+
     try {
       await updateProjectMutation.mutateAsync({
-        id: projectId,
-        updates: {
+        projectId,
+        input: {
           name: data.name,
           address: data.address || undefined,
           description: data.description || undefined,
         },
+        coverImage: coverImage || undefined,
       });
 
       router.push("/dashboard/projects");
     } catch (error) {
-      console.error("Error updating project:", error);
+      logger.error("Error updating project:", error);
     }
   };
 
@@ -58,7 +67,7 @@ export default function EditProjectPage() {
           address: project.address || "",
           description: project.description || "",
         }}
-        existingCoverUrl={project.cover_image_url}
+        existingCoverUrl={project.coverImageUrl}
         onSubmit={handleSubmit}
         isLoading={isLoading}
       />

@@ -3,6 +3,7 @@
 import { supabase } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { logger } from '@/lib/logger';
 
 export default function TestSupabase() {
   const [plans, setPlans] = useState<any[]>([])
@@ -49,7 +50,7 @@ export default function TestSupabase() {
         setBuckets(bucketsData || [])
 
       } catch (err: any) {
-        console.error('Supabase test error:', err)
+        logger.error('Supabase test error:', err)
         setError(err.message)
       } finally {
         setLoading(false)

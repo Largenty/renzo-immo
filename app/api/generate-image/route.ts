@@ -1,17 +1,31 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
+import { generateImageLimiter, checkRateLimit } from '@/lib/rate-limit'
+import { generateImageRequestSchema, validateRequest } from '@/lib/validators/api-schemas'
+import { logger } from '@/lib/logger'
+import { buildPrompt, type RoomType } from '@/lib/prompts/prompt-builder'
 
 export async function POST(request: NextRequest) {
   let imageId: string | undefined
 
   try {
     const body = await request.json()
-    imageId = body.imageId
 
-    if (!imageId) {
-      return NextResponse.json({ error: 'Image ID required' }, { status: 400 })
+    // ✅ ZOD VALIDATION: Valider le body de la requête
+    const validation = validateRequest(generateImageRequestSchema, body)
+
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          error: validation.error,
+          details: validation.details,
+        },
+        { status: 400 }
+      )
     }
+
+    imageId = validation.data.imageId
 
     // Créer le client Supabase
     const supabase = await createClient()
@@ -23,6 +37,43 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // ✅ EMAIL VERIFICATION: Vérifier que l'email est confirmé
+    if (!user.confirmed_at) {
+      return NextResponse.json(
+        {
+          error: 'Email verification required',
+          message: 'Please verify your email before generating images',
+        },
+        { status: 403 }
+      )
+    }
+
+    // ✅ RATE LIMITING: Vérifier le rate limit par user ID
+    const { success, limit, remaining, reset } = await checkRateLimit(
+      generateImageLimiter,
+      user.id
+    )
+
+    if (!success) {
+      return NextResponse.json(
+        {
+          error: 'Rate limit exceeded',
+          message: 'Too many image generation requests. Please try again later.',
+          limit,
+          remaining,
+          reset: new Date(reset).toISOString(),
+        },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': limit.toString(),
+            'X-RateLimit-Remaining': remaining.toString(),
+            'X-RateLimit-Reset': reset.toString(),
+          },
+        }
+      )
     }
 
     // 1. Récupérer les infos de l'image
@@ -41,43 +92,95 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // 2. Récupérer le prompt approprié depuis la DB
-    // Convertir with_furniture (boolean) en furniture_mode (text)
-    let furnitureMode = 'auto'
-    if (image.with_furniture === true) {
-      furnitureMode = 'with'
-    } else if (image.with_furniture === false) {
-      furnitureMode = 'without'
-    }
+    // 🐛 DEBUG: Log COMPLET des données de l'image depuis la DB
+    logger.info('========== IMAGE DATA FROM DATABASE ==========', {
+      image_id: image.id,
+      transformation_type: (image as any).transformation_type,
+      transformation_type_id: (image as any).transformation_type_id,
+      with_furniture: image.with_furniture,
+      furniture_ids: (image as any).furniture_ids,
+      room_type: image.room_type,
+      custom_room: (image as any).custom_room,
+      custom_prompt: image.custom_prompt,
+      status: image.status,
+      ALL_COLUMNS: Object.keys(image),
+    })
 
-    const { data: promptData, error: promptError } = await supabase.rpc(
-      'get_transformation_prompt',
-      {
-        p_transformation_type: image.transformation_type,
-        p_room_type: image.room_type,
-        p_furniture_mode: furnitureMode,
+    // 2. Récupérer le prompt approprié via le système modulaire
+    const roomType = (image.room_type || null) as RoomType | null
+    const furnitureIds = (image.furniture_ids || []) as string[]
+    // 🔄 TEMPORAIRE: utiliser transformation_type (slug) au lieu de transformation_type_id (UUID)
+    const transformationTypeId = (image as any).transformation_type || (image as any).transformation_type_id
+
+    logger.info('🔍 Building modular prompt', {
+      transformationTypeId,
+      roomType,
+      furnitureCount: furnitureIds.length,
+      hasCustomPrompt: !!image.custom_prompt,
+    })
+
+    // ✅ PROMPT SANITIZATION: Nettoyer et valider le prompt personnalisé d'abord
+    let sanitizedCustomPrompt: string | null = null
+    if (image.custom_prompt) {
+      const { sanitizeAndValidatePrompt } = await import('@/lib/validators/prompt-sanitizer')
+      const promptValidation = sanitizeAndValidatePrompt(image.custom_prompt)
+
+      if (!promptValidation.success) {
+        logger.warn('Invalid custom prompt detected:', promptValidation.error)
+        return NextResponse.json(
+          {
+            error: 'Invalid custom prompt',
+            details: promptValidation.error,
+          },
+          { status: 400 }
+        )
       }
-    )
 
-    if (promptError) {
-      console.error('Error fetching prompt:', promptError)
-      return NextResponse.json({
-        error: 'Failed to get prompt. Did you run the create-prompts-table.sql script?',
-        details: promptError.message
-      }, { status: 500 })
+      sanitizedCustomPrompt = promptValidation.prompt
     }
 
-    // Utiliser le prompt personnalisé si fourni, sinon le prompt de la DB
-    const finalPrompt = image.custom_prompt || promptData
+    // Construire le prompt avec le système modulaire
+    const promptResult = await buildPrompt({
+      transformationTypeId, // 🔄 Utiliser la variable définie plus haut
+      roomType: roomType!,
+      furnitureIds,
+      customPrompt: sanitizedCustomPrompt,
+    })
 
-    if (!finalPrompt) {
-      console.error('No prompt available for this transformation')
-      return NextResponse.json({
-        error: 'No prompt configured for this transformation type. Please run create-prompts-table.sql script.'
-      }, { status: 500 })
+    if (!promptResult.prompt) {
+      logger.error('No prompt available for this transformation', {
+        transformationTypeId,
+        roomType,
+      })
+      return NextResponse.json(
+        {
+          error: 'No prompt configured for this transformation type',
+          details: 'Please ensure modular prompt system is properly configured',
+        },
+        { status: 500 }
+      )
     }
 
-    console.log('🎨 Generating image with prompt:', finalPrompt.substring(0, 100) + '...')
+    // 🐛 DEBUG: Log du prompt final généré
+    logger.info('========== FINAL PROMPT GENERATED ==========', {
+      source: promptResult.source,
+      metadata: promptResult.metadata,
+      promptLength: promptResult.prompt.length,
+      promptPreview: promptResult.prompt.substring(0, 500) + '...',
+      fullPrompt: promptResult.prompt,
+    })
+
+    logger.info('✅ Modular prompt built', {
+      source: promptResult.source,
+      styleName: promptResult.metadata?.style_name,
+      roomName: promptResult.metadata?.room_name,
+      furnitureCount: promptResult.metadata?.furniture_count,
+      promptLength: promptResult.prompt.length,
+    })
+
+    logger.debug('🎨 Generating image with prompt:', promptResult.prompt.substring(0, 100) + '...')
+
+    const finalPrompt = promptResult.prompt
 
     // 3. Mettre à jour le statut à "processing"
     await supabase
@@ -95,7 +198,7 @@ export async function POST(request: NextRequest) {
       throw new Error('NANOBANANA_API_KEY not configured')
     }
 
-    console.log('📡 Calling NanoBanana API...')
+    logger.debug('📡 Calling NanoBanana API...')
 
     // Détecter les dimensions EXACTES de l'image pour les préserver
     let imageSize = '16:9' // Default ratio pour NanoBanana
@@ -141,9 +244,9 @@ export async function POST(request: NextRequest) {
       }
 
       imageSize = closestRatio
-      console.log(`📐 Original image dimensions: ${originalWidth}x${originalHeight} (ratio: ${ratio.toFixed(2)}, using NanoBanana ratio: ${imageSize})`)
+      logger.debug(`📐 Original image dimensions: ${originalWidth}x${originalHeight} (ratio: ${ratio.toFixed(2)}, using NanoBanana ratio: ${imageSize})`)
     } catch (error) {
-      console.warn('⚠️ Could not detect image dimensions, using default 16:9:', error)
+      logger.warn('⚠️ Could not detect image dimensions, using default 16:9:', error)
     }
 
     // Pour l'instant, on va utiliser l'approche sans callback (simplifiée)
@@ -160,11 +263,11 @@ export async function POST(request: NextRequest) {
         type: 'IMAGETOIAMGE', // Note: faute de frappe dans leur API (IAMGE au lieu de IMAGE)
         image_size: imageSize, // Utilise le ratio détecté
         imageUrls: [image.original_url], // Array d'URLs d'images sources à transformer
-        callBackUrl: process.env.NEXT_PUBLIC_APP_URL + '/api/nanobanana-webhook', // Webhook pour recevoir le résultat
+        callBackUrl: (process.env.APP_URL || 'http://localhost:3000') + '/api/nanobanana-webhook', // Webhook pour recevoir le résultat
       }),
     }).catch((fetchError) => {
-      console.error('❌ NanoBanana fetch error:', fetchError)
-      console.error('Error details:', {
+      logger.error('❌ NanoBanana fetch error:', fetchError)
+      logger.error('Error details:', {
         message: fetchError.message,
         cause: fetchError.cause,
         code: fetchError.code,
@@ -174,18 +277,19 @@ export async function POST(request: NextRequest) {
 
     if (!nanoBananaResponse.ok) {
       const errorText = await nanoBananaResponse.text()
-      console.error('❌ NanoBanana API error:', errorText)
+      logger.error('❌ NanoBanana API error:', errorText)
       throw new Error(`NanoBanana API failed: ${nanoBananaResponse.status} - ${errorText}`)
     }
 
-    console.log('✅ NanoBanana API response received')
+    logger.debug('✅ NanoBanana API response received')
 
     const nanoBananaResult = await nanoBananaResponse.json()
-    console.log('📦 NanoBanana result:', JSON.stringify(nanoBananaResult, null, 2))
+    logger.debug('📦 NanoBanana result:', JSON.stringify(nanoBananaResult, null, 2))
 
     // 5. Récupérer l'URL de l'image générée ou l'ID de la tâche
     // La structure de réponse peut contenir soit une URL directe, soit un ID de tâche
     const taskId = nanoBananaResult.data?.taskId || nanoBananaResult.taskId
+    const requestId = nanoBananaResult.data?.requestId || nanoBananaResult.requestId || nanoBananaResult.data?.id || nanoBananaResult.id
     const generatedImageUrl = nanoBananaResult.data?.imageUrl || nanoBananaResult.imageUrl || nanoBananaResult.url || nanoBananaResult.output?.[0]
 
     // Si NanoBanana retourne un ID de tâche au lieu d'une image directe
@@ -193,12 +297,13 @@ export async function POST(request: NextRequest) {
     if (!generatedImageUrl && taskId) {
       // Pour l'instant, on laisse l'image en "processing"
       // et on retourne un message indiquant que c'est en cours
-      console.log('⏳ NanoBanana task queued with ID:', taskId)
+      logger.debug('⏳ NanoBanana task queued with ID:', taskId)
 
-      // Sauvegarder le taskId ET les dimensions originales pour polling ultérieur
+      // Sauvegarder le taskId, requestId ET les dimensions originales pour polling ultérieur
       await supabase
         .from('images')
         .update({
+          nano_request_id: requestId,
           metadata: {
             nanobanana_task_id: taskId,
             original_width: originalWidth,
@@ -217,11 +322,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!generatedImageUrl) {
-      console.error('❌ No image URL in response:', nanoBananaResult)
+      logger.error('❌ No image URL in response:', nanoBananaResult)
       throw new Error('No image URL in NanoBanana response')
     }
 
-    console.log('🖼️ Generated image URL:', generatedImageUrl)
+    logger.debug('🖼️ Generated image URL:', generatedImageUrl)
 
     // 6. Télécharger l'image générée et l'uploader sur Supabase Storage
     const imageResponse = await fetch(generatedImageUrl)
@@ -235,7 +340,7 @@ export async function POST(request: NextRequest) {
       })
 
     if (uploadError) {
-      console.error('Storage upload error:', uploadError)
+      logger.error('Storage upload error:', uploadError)
       throw new Error('Failed to upload transformed image')
     }
 
@@ -244,7 +349,7 @@ export async function POST(request: NextRequest) {
       data: { publicUrl },
     } = supabase.storage.from('images').getPublicUrl(uploadData.path)
 
-    console.log('✅ Image uploaded to Supabase Storage:', publicUrl)
+    logger.debug('✅ Image uploaded to Supabase Storage:', publicUrl)
 
     // 8. Mettre à jour l'image avec le résultat
     const completedAt = new Date().toISOString()
@@ -262,11 +367,11 @@ export async function POST(request: NextRequest) {
       .eq('id', imageId)
 
     if (updateError) {
-      console.error('Error updating image:', updateError)
+      logger.error('Error updating image:', updateError)
       throw new Error('Failed to update image status')
     }
 
-    console.log('🎉 Image generation completed!')
+    logger.debug('🎉 Image generation completed!')
 
     return NextResponse.json({
       success: true,
@@ -274,7 +379,7 @@ export async function POST(request: NextRequest) {
       transformedUrl: publicUrl,
     })
   } catch (error: any) {
-    console.error('Generate image error:', error)
+    logger.error('Generate image error:', error)
 
     // Mettre l'image en statut "failed" si quelque chose a échoué
     if (imageId) {
@@ -289,7 +394,7 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', imageId)
       } catch (e) {
-        console.error('Failed to update error status:', e)
+        logger.error('Failed to update error status:', e)
       }
     }
 

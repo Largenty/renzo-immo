@@ -1,23 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { signIn, signInWithGoogle } from "@/lib/auth/actions";
+import { useSignIn } from "@/domain/auth";
 import { AuthCard, LoginForm } from "@/components/auth";
 import Link from "next/link";
+import { Suspense } from "react";
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/dashboard";
-  const [isLoading, setIsLoading] = useState(false);
+  const signInMutation = useSignIn();
 
   const handleSubmit = async (data: { email: string; password: string }) => {
-    setIsLoading(true);
-
     try {
-      const result = await signIn(data);
+      const result = await signInMutation.mutateAsync(data);
 
       if (result.success) {
         toast.success("Connexion réussie !", {
@@ -33,26 +31,11 @@ export default function LoginPage() {
       toast.error("Erreur", {
         description: "Une erreur est survenue lors de la connexion",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
-    try {
-      const result = await signInWithGoogle();
-
-      if (!result.success && result.error) {
-        toast.error("Erreur Google", {
-          description: result.error,
-        });
-      }
-      // Si succès, on sera redirigé vers Google OAuth
-    } catch {
-      toast.error("Erreur", {
-        description: "Impossible de se connecter avec Google",
-      });
-    }
+    toast.info("Fonctionnalité Google OAuth à implémenter");
   };
 
   return (
@@ -63,7 +46,7 @@ export default function LoginPage() {
       <LoginForm
         onSubmit={handleSubmit}
         onGoogleSignIn={handleGoogleSignIn}
-        isLoading={isLoading}
+        isLoading={signInMutation.isPending}
       />
 
       {/* Back to home */}
@@ -76,5 +59,22 @@ export default function LoginPage() {
         </Link>
       </div>
     </AuthCard>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <AuthCard
+        title="Bon retour !"
+        subtitle="Connectez-vous à votre compte pour continuer"
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-slate-500">Chargement...</div>
+        </div>
+      </AuthCard>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

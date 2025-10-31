@@ -1,14 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import {
-  useCustomStyles,
-  useCreateCustomStyle,
-  useUpdateCustomStyle,
-  useDeleteCustomStyle,
-  type CustomStyle,
-} from "@/lib/hooks";
-import { useAuthStore } from "@/lib/stores/auth-store";
+import { useState, useMemo, useEffect } from "react";
+import { useAuthStore, useStylesStore } from "@/lib/stores";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,21 +22,32 @@ import {
 } from "@/components/dashboard";
 import { EmptyState } from "@/components/projects";
 
-export default function StylesPage() {
-  const { isInitialized, user } = useAuthStore();
-  const shouldFetch = isInitialized && !!user;
+// Type pour le style en édition
+interface EditingStyle {
+  id: string;
+  name: string;
+  description?: string | null;
+  iconName?: string | null;
+  promptTemplate?: string | null;
+  allowFurnitureToggle: boolean;
+}
 
-  // Data fetching
-  const { data: styles = [], isLoading } = useCustomStyles(shouldFetch);
-  const createStyle = useCreateCustomStyle();
-  const updateStyle = useUpdateCustomStyle();
-  const deleteStyle = useDeleteCustomStyle();
+export default function StylesPage() {
+  const { user } = useAuthStore();
+  const { styles, isLoading, fetchStyles, createStyle, updateStyle, deleteStyle } = useStylesStore();
 
   // UI states
   const [searchQuery, setSearchQuery] = useState("");
   const [formDialogOpen, setFormDialogOpen] = useState(false);
-  const [editingStyle, setEditingStyle] = useState<CustomStyle | null>(null);
+  const [editingStyle, setEditingStyle] = useState<EditingStyle | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Charger les styles au montage
+  useEffect(() => {
+    if (user?.id) {
+      fetchStyles(user.id);
+    }
+  }, [user?.id, fetchStyles]);
 
   // Filter styles
   const filteredStyles = useMemo(() => {
@@ -57,36 +61,40 @@ export default function StylesPage() {
   }, [styles, searchQuery]);
 
   const handleCreate = async (data: StyleFormData) => {
-    await createStyle.mutateAsync({
+    if (!user?.id) return;
+
+    await createStyle({
       name: data.name,
       description: data.description || undefined,
-      icon_name: data.iconName,
-      prompt_template: data.promptTemplate || undefined,
-      allow_furniture_toggle: data.allowFurniture,
+      iconName: data.iconName,
+      promptTemplate: data.promptTemplate || undefined,
+      allowFurnitureToggle: data.allowFurniture,
+      userId: user.id,
     });
     setFormDialogOpen(false);
   };
 
   const handleUpdate = async (data: StyleFormData) => {
     if (!editingStyle) return;
-    await updateStyle.mutateAsync({
-      id: editingStyle.id,
+
+    await updateStyle(editingStyle.id, {
       name: data.name,
       description: data.description || null,
-      icon_name: data.iconName,
-      prompt_template: data.promptTemplate || null,
-      allow_furniture_toggle: data.allowFurniture,
+      iconName: data.iconName,
+      promptTemplate: data.promptTemplate || null,
+      allowFurnitureToggle: data.allowFurniture,
     });
     setEditingStyle(null);
   };
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
-    await deleteStyle.mutateAsync(deleteConfirmId);
+
+    await deleteStyle(deleteConfirmId);
     setDeleteConfirmId(null);
   };
 
-  const openEditDialog = (style: CustomStyle) => {
+  const openEditDialog = (style: EditingStyle) => {
     setEditingStyle(style);
   };
 
@@ -141,8 +149,10 @@ export default function StylesPage() {
           <EmptyState
             title="Aucun style personnalisé"
             description="Créez votre premier style pour commencer"
-            actionLabel="Créer un style"
-            onAction={openCreateDialog}
+            action={{
+              label: "Créer un style",
+              onClick: openCreateDialog
+            }}
           />
         )
       ) : (
@@ -152,8 +162,8 @@ export default function StylesPage() {
               key={style.id}
               name={style.name}
               description={style.description || undefined}
-              iconName={style.icon_name || "Sparkles"}
-              allowFurniture={style.allow_furniture_toggle}
+              iconName={style.iconName || "Sparkles"}
+              allowFurniture={style.allowFurnitureToggle}
               onEdit={() => openEditDialog(style)}
               onDelete={() => setDeleteConfirmId(style.id)}
             />
@@ -176,9 +186,9 @@ export default function StylesPage() {
             ? {
                 name: editingStyle.name,
                 description: editingStyle.description || "",
-                iconName: editingStyle.icon_name || "Sparkles",
-                promptTemplate: editingStyle.prompt_template || "",
-                allowFurniture: editingStyle.allow_furniture_toggle,
+                iconName: editingStyle.iconName || "Sparkles",
+                promptTemplate: editingStyle.promptTemplate || "",
+                allowFurniture: editingStyle.allowFurnitureToggle,
               }
             : undefined
         }
@@ -188,7 +198,7 @@ export default function StylesPage() {
             ? "Modifiez les paramètres de votre style personnalisé"
             : "Créez un nouveau style de transformation personnalisé"
         }
-        isLoading={createStyle.isPending || updateStyle.isPending}
+        isLoading={isLoading}
       />
 
       {/* Delete Confirmation */}
@@ -207,9 +217,9 @@ export default function StylesPage() {
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={deleteStyle.isPending}
+              disabled={isLoading}
             >
-              {deleteStyle.isPending ? (
+              {isLoading ? (
                 <>
                   <Loader2 size={16} className="mr-2 animate-spin" />
                   Suppression...

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { gsap } from "@/lib/gsap-utils";
 import { Menu, X, User, LogOut } from "lucide-react";
-import { useUser, useIsAuthenticated } from "@/lib/stores/auth-store";
+import { useCurrentUser } from "@/domain/auth";
 import { LogoutModal } from "@/components/modals/logout-modal";
 import {
   DropdownMenu,
@@ -21,8 +21,13 @@ export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
-  const user = useUser();
-  const isAuthenticated = useIsAuthenticated();
+  const [mounted, setMounted] = useState(false);
+  const { data: user, isLoading } = useCurrentUser();
+  const isAuthenticated = !!user && !isLoading;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -69,7 +74,21 @@ export function Navbar() {
             Contact
           </a>
 
-          {isAuthenticated ? (
+          {!mounted ? (
+            // Placeholder pendant l'hydration pour éviter l'erreur
+            <>
+              <Link href="/auth/login">
+                <Button variant="ghost" size="sm" className="text-gray-700 hover:text-white">
+                  Se connecter
+                </Button>
+              </Link>
+              <Link href="/auth/signup">
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Commencer gratuitement
+                </Button>
+              </Link>
+            </>
+          ) : isAuthenticated ? (
             <>
               <Link href="/dashboard">
                 <Button variant="ghost" size="sm" className="text-gray-700 hover:text-gray-900">
@@ -80,14 +99,14 @@ export function Navbar() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-2">
                     <User size={16} />
-                    {user?.first_name || "Mon compte"}
+                    {user?.firstName || "Mon compte"}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div className="flex flex-col">
                       <span className="font-semibold">
-                        {user?.first_name} {user?.last_name}
+                        {user?.firstName} {user?.lastName}
                       </span>
                       <span className="text-xs text-gray-500">{user?.email}</span>
                     </div>
@@ -100,7 +119,7 @@ export function Navbar() {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/dashboard/credits" className="cursor-pointer">
-                      Crédits ({user?.credits_balance || 0})
+                      Crédits ({user?.creditsBalance || 0})
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -117,7 +136,7 @@ export function Navbar() {
           ) : (
             <>
               <Link href="/auth/login">
-                <Button variant="ghost" size="sm" className="text-gray-700 hover:text-gray-900">
+                <Button variant="ghost" size="sm" className="text-gray-700 hover:text-white">
                   Se connecter
                 </Button>
               </Link>
@@ -153,7 +172,20 @@ export function Navbar() {
               Contact
             </a>
             <div className="pt-2 space-y-2">
-              {isAuthenticated ? (
+              {!mounted ? (
+                <>
+                  <Link href="/auth/login" className="block">
+                    <Button variant="outline" size="sm" className="w-full">
+                      Se connecter
+                    </Button>
+                  </Link>
+                  <Link href="/auth/signup" className="block">
+                    <Button size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                      Commencer gratuitement
+                    </Button>
+                  </Link>
+                </>
+              ) : isAuthenticated ? (
                 <>
                   <Link href="/dashboard" className="block">
                     <Button variant="outline" size="sm" className="w-full">

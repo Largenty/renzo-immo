@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
@@ -15,15 +15,20 @@ import {
   Sparkles,
   User,
   Palette,
+  Sofa,
+  Home,
 } from "lucide-react";
 import { LogoutModal } from "@/components/modals/logout-modal";
-import { useUser, useCreditsBalance } from "@/lib/stores/auth-store";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { useAuthStore, useCreditsStore } from "@/lib/stores";
+import { logger } from '@/lib/logger';
 
 const navigation = [
   { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
   { name: "Mes projets", href: "/dashboard/projects", icon: FolderOpen },
   { name: "Mes styles", href: "/dashboard/styles", icon: Palette },
+  { name: "Meubles", href: "/dashboard/furniture", icon: Sofa },
+  { name: "Pièces", href: "/dashboard/rooms", icon: Home },
   { name: "Paramètres", href: "/dashboard/settings", icon: Settings },
   { name: "Crédits", href: "/dashboard/credits", icon: CreditCard },
 ];
@@ -34,10 +39,49 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
-  const user = useUser();
-  const creditsBalance = useCreditsBalance();
+
+  // UNIQUEMENT Zustand stores
+  const { user, isLoading } = useAuthStore();
+  const { balance: creditsBalance, fetchBalance } = useCreditsStore();
+
+  // Charger les crédits quand l'utilisateur est chargé
+  useEffect(() => {
+    if (user?.id) {
+      fetchBalance(user.id);
+    }
+  }, [user?.id, fetchBalance]);
+
+  // ⚠️ IMPORTANT: Ne pas faire de redirection côté client ici
+  // Le middleware s'occupe déjà de protéger les routes /dashboard
+  // Rediriger ici créerait une boucle infinie avec le middleware
+
+  // Afficher loader pendant le chargement initial du store
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-sm text-slate-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si pas encore de user mais que le middleware nous a laissé passer,
+  // afficher le loader (le user va arriver sous peu)
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-sm text-slate-600">Chargement du profil...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -96,10 +140,10 @@ export default function DashboardLayout({
           {/* User section */}
           <div className="p-4 border-t border-slate-200">
             <div className="flex items-center gap-3 px-4 py-3 rounded-md bg-slate-50">
-              {user?.avatar_url ? (
+              {user?.avatarUrl ? (
                 <img
-                  src={user.avatar_url}
-                  alt={`${user.first_name} ${user.last_name}`}
+                  src={user.avatarUrl}
+                  alt={`${user.firstName} ${user.lastName}`}
                   className="w-8 h-8 rounded-md object-cover"
                 />
               ) : (
@@ -109,10 +153,11 @@ export default function DashboardLayout({
               )}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-slate-900 truncate">
-                  {user?.first_name} {user?.last_name}
+                  {user?.firstName} {user?.lastName}
                 </div>
                 <div className="text-xs text-slate-500">
-                  {user?.subscription_plan_id ? "Pro Plan" : "Free Plan"}
+                  {/* @ts-ignore - TODO: Fix User type to include subscriptionPlanId */}
+                  {user?.subscriptionPlanId ? "Pro Plan" : "Free Plan"}
                 </div>
               </div>
             </div>

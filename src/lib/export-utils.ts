@@ -5,6 +5,7 @@
 
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { logger } from '@/lib/logger';
 
 /**
  * Interface pour une image à exporter
@@ -33,7 +34,7 @@ export async function downloadImage(url: string, filename: string): Promise<void
     const blob = await response.blob();
     saveAs(blob, filename);
   } catch (error) {
-    console.error('Error downloading image:', error);
+    logger.error('Error downloading image:', error);
     throw new Error('Failed to download image');
   }
 }
@@ -53,7 +54,7 @@ export async function downloadImage(url: string, filename: string): Promise<void
  *     { url: '/image2.jpg', filename: 'image2.jpg' },
  *   ],
  *   { projectName: 'Mon Projet', includeOriginals: true },
- *   (progress) => console.log(`${progress}%`)
+ *   (progress) => logger.debug(`${progress}%`)
  * );
  * ```
  */
@@ -94,7 +95,7 @@ export async function downloadImagesAsZip(
         onProgress(Math.round((completed / images.length) * 100));
       }
     } catch (error) {
-      console.error(`Failed to download ${image.filename}:`, error);
+      logger.error(`Failed to download ${image.filename}:`, error);
       // Continue avec les autres images
     }
   }
@@ -122,7 +123,7 @@ Généré avec Renzo Immobilier
     const filename = `${projectName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.zip`;
     saveAs(zipBlob, filename);
   } catch (error) {
-    console.error('Error generating ZIP:', error);
+    logger.error('Error generating ZIP:', error);
     throw new Error('Failed to generate ZIP file');
   }
 }

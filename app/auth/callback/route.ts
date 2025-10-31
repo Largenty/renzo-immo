@@ -6,6 +6,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (error) {
-      console.error('Auth callback error:', error)
+      logger.error('Auth callback error:', error)
       return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`)
     }
 

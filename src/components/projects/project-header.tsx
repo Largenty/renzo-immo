@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Archive, Upload, Loader2, Edit, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { logger } from '@/lib/logger';
 import {
   Dialog,
   DialogContent,
@@ -53,7 +54,7 @@ export function ProjectHeader({
           {address && <p className="text-slate-600 mt-1">{address}</p>}
           {description && <p className="text-sm text-slate-500 mt-2">{description}</p>}
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap relative z-50">
           {projectId && (
             <>
               <Link href={`/dashboard/projects/${projectId}/edit`}>
@@ -92,13 +93,24 @@ export function ProjectHeader({
               </>
             )}
           </Button>
-          <Dialog open={uploadDialogOpen} onOpenChange={onUploadDialogChange}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 btn-glow">
-                <Upload size={20} className="mr-2" />
-                Ajouter des photos
-              </Button>
-            </DialogTrigger>
+          <Button
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 btn-glow relative z-50"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              logger.debug('🖱️ Upload button clicked');
+              onUploadDialogChange(true);
+            }}
+            type="button"
+          >
+            <Upload size={20} className="mr-2" />
+            Ajouter des photos
+          </Button>
+
+          <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
+            logger.debug('🔄 Dialog onOpenChange called with:', open);
+            onUploadDialogChange(open);
+          }}>
             <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-bold">Ajouter des photos</DialogTitle>

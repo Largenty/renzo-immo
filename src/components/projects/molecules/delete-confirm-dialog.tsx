@@ -10,7 +10,7 @@ import {
   Button,
 } from "@/components/ui";
 import { AlertCircle, Trash2, Loader2 } from "lucide-react";
-import type { Image as ImageType } from "@/lib/hooks";
+import type { Image as ImageType } from "@/domain/images";
 
 /**
  * Props pour le composant DeleteConfirmDialog
@@ -38,7 +38,7 @@ export function DeleteConfirmDialog({
   if (!image) return null;
 
   return (
-    <Dialog open={!!image} onOpenChange={onCancel}>
+    <Dialog open={!!image} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-slate-900">
@@ -52,7 +52,7 @@ export function DeleteConfirmDialog({
           <div className="space-y-3">
             <div className="relative h-32 rounded-md overflow-hidden bg-slate-100">
               <Image
-                src={image.original_url}
+                src={image.originalUrl}
                 alt="Image à supprimer"
                 fill
                 className="object-cover"

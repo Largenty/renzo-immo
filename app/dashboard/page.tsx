@@ -11,28 +11,23 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
-import { useProjects } from "@/lib/hooks/use-projects";
-import { useCreditStats } from "@/lib/hooks/use-credits";
-import { useMemo, useEffect } from "react";
+import { useProjects } from "@/domain/projects";
+import { useCreditStats } from "@/domain/credits";
+import { useCurrentUser } from "@/domain/auth";
+import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { useAuthStore } from "@/lib/stores/auth-store";
 
 export default function DashboardPage() {
-  const { isInitialized, user } = useAuthStore();
+  const { data: user } = useCurrentUser();
 
-  // Charger les données réelles seulement si l'auth est initialisée ET qu'on a un user
-  const shouldFetch = isInitialized && !!user;
-
-  console.log('🎯 Dashboard render - isInitialized:', isInitialized, 'user:', !!user, 'shouldFetch:', shouldFetch);
-
-  const { data: projects = [], isLoading: isLoadingProjects } = useProjects(shouldFetch);
-  const { data: creditStats, isLoading: isLoadingCredits } = useCreditStats();
+  const { data: projects = [], isLoading: isLoadingProjects } = useProjects(user?.id);
+  const { data: creditStats, isLoading: isLoadingCredits } = useCreditStats(user?.id);
 
   // Calculer les stats
   const stats = useMemo(() => {
     const totalProjects = projects.length;
-    const totalImages = projects.reduce((sum, p) => sum + (p.total_images || 0), 0);
-    const completedImages = projects.reduce((sum, p) => sum + (p.completed_images || 0), 0);
+    const totalImages = projects.reduce((sum, p) => sum + (p.totalImages || 0), 0);
+    const completedImages = projects.reduce((sum, p) => sum + (p.completedImages || 0), 0);
 
     return [
       {
@@ -51,9 +46,9 @@ export default function DashboardPage() {
       },
       {
         name: "Crédits restants",
-        value: creditStats?.total_remaining?.toString() || "0",
+        value: creditStats?.balance?.toString() || "0",
         icon: Sparkles,
-        change: creditStats?.total_purchased ? `sur ${creditStats.total_purchased}` : "Aucun achat",
+        change: creditStats?.totalPurchased ? `sur ${creditStats.totalPurchased}` : "Aucun achat",
         changeType: "neutral" as const,
       },
       {
@@ -130,10 +125,10 @@ export default function DashboardPage() {
                 id={project.id}
                 name={project.name}
                 address={project.address}
-                coverImageUrl={project.cover_image_url}
-                totalImages={project.total_images || 0}
-                completedImages={project.completed_images || 0}
-                updatedAt={project.updated_at}
+                coverImageUrl={project.coverImageUrl}
+                totalImages={project.totalImages || 0}
+                completedImages={project.completedImages || 0}
+                updatedAt={project.updatedAt.toISOString()}
               />
             ))}
           </div>

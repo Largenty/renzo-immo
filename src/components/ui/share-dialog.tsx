@@ -21,6 +21,7 @@ import {
   Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { logger } from '@/lib/logger';
 
 interface ShareDialogProps {
   open: boolean;
@@ -94,7 +95,7 @@ export function ShareDialog({
         });
       } catch (error) {
         // User cancelled or error occurred
-        console.log("Share cancelled or failed:", error);
+        logger.debug("Share cancelled or failed:", error);
       }
     } else {
       handleCopy();

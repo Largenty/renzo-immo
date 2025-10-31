@@ -12,7 +12,7 @@ import {
   AlertCircle,
   Clock,
 } from "lucide-react";
-import type { Image as ImageType } from "@/lib/hooks";
+import type { Image as ImageType } from "@/domain/images";
 
 /**
  * Props pour le composant ImageGridCard
@@ -25,7 +25,7 @@ interface ImageGridCardProps {
   onView: () => void;
   onDownload: (url: string, filename: string) => void;
   onDelete: () => void;
-  onGenerate: () => void;
+  onGenerate: (imageId: string) => void;
 }
 
 /**
@@ -52,7 +52,7 @@ export function ImageGridCard({
         {/* Original */}
         <div className="relative h-48 bg-slate-100 border-r border-slate-200">
           <Image
-            src={image.original_url}
+            src={image.originalUrl}
             alt="Original"
             fill
             loading="lazy"
@@ -66,10 +66,10 @@ export function ImageGridCard({
 
         {/* Transformed */}
         <div className="relative h-48 bg-slate-100">
-          {image.transformed_url ? (
+          {image.transformedUrl ? (
             <>
               <Image
-                src={image.transformed_url}
+                src={image.transformedUrl}
                 alt="Transformé"
                 fill
                 loading="lazy"
@@ -133,9 +133,9 @@ export function ImageGridCard({
               className="p-0 h-8 w-8 flex-shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
-                if (image.transformed_url) {
+                if (image.transformedUrl) {
                   const filename = `${projectName}-${transformationLabel}-${Date.now()}.png`;
-                  onDownload(image.transformed_url, filename);
+                  onDownload(image.transformedUrl, filename);
                 }
               }}
               title="Télécharger"
@@ -162,7 +162,7 @@ export function ImageGridCard({
               className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
               onClick={(e) => {
                 e.stopPropagation();
-                onGenerate();
+                onGenerate(image.id);
               }}
               disabled={isGenerating}
             >
@@ -171,7 +171,7 @@ export function ImageGridCard({
                   <Loader2 size={14} className="mr-1 animate-spin" />
                   <span className="hidden sm:inline">Génération...</span>
                 </>
-              ) : image.transformed_url ? (
+              ) : image.transformedUrl ? (
                 <>
                   <RotateCcw size={14} className="mr-1" />
                   <span className="hidden sm:inline">Regénérer (1 crédit)</span>
@@ -221,9 +221,9 @@ export function ImageGridCard({
         {/* Actions pour image échouée */}
         {image.status === "failed" && (
           <div className="space-y-2">
-            {image.error_message && (
+            {image.errorMessage && (
               <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
-                {image.error_message}
+                {image.errorMessage}
               </div>
             )}
             <div className="flex gap-1.5">
@@ -232,7 +232,7 @@ export function ImageGridCard({
                 className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onGenerate();
+                  onGenerate(image.id);
                 }}
                 disabled={isGenerating}
               >

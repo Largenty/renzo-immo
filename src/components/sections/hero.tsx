@@ -156,7 +156,7 @@ export function Hero() {
 
           {/* Hero Image */}
           <div ref={imageRef} className="relative">
-            <div className="animated-border p-1">
+            <div className="">
               <div className="relative h-[500px] lg:h-[650px] rounded-md overflow-hidden bg-white shadow-2xl">
                 <Image
                   src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&q=90"
@@ -167,20 +167,6 @@ export function Hero() {
                   sizes="(max-width: 1024px) 100vw, 50vw"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-slate-900/5 to-transparent"></div>
-
-                {/* Live badge */}
-                <div className="absolute top-6 left-6 glass px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <div className="w-2 h-2 rounded-sm bg-green-500"></div>
-                      <div className="absolute inset-0 w-2 h-2 rounded-sm bg-green-500 animate-ping"></div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-900">En direct</div>
-                      <div className="text-[10px] text-slate-600">348 photos aujourd'hui</div>
-                    </div>
-                  </div>
-                </div>
 
                 {/* Performance badge */}
                 <div className="absolute bottom-6 right-6 glass px-5 py-3 border border-blue-200/50">

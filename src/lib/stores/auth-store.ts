@@ -1,139 +1,154 @@
-/**
- * Auth Store - Zustand
- * Gère l'état global de l'authentification côté client
- */
+import { create } from 'zustand';
+import { createClient } from '@/lib/supabase/client';
+import { logger } from '@/lib/logger';
 
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Session } from '@supabase/supabase-js'
-
-export interface UserData {
-  id: string
-  email: string
-  first_name: string
-  last_name: string
-  avatar_url?: string
-  company?: string
-  email_verified: boolean
-  credits_balance: number
-  subscription_plan_id?: string
-  created_at: string
+interface User {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
+  phone?: string;
+  company?: string;
+  address?: string;
 }
 
-interface AuthState {
-  // État
-  user: UserData | null
-  session: Session | null
-  isLoading: boolean
-  isInitialized: boolean
+interface AuthStore {
+  user: User | null;
+  isLoading: boolean;
+  isInitialized: boolean;
 
   // Actions
-  setUser: (user: UserData | null) => void
-  setSession: (session: Session | null) => void
-  setLoading: (loading: boolean) => void
-  setInitialized: (initialized: boolean) => void
-  updateUser: (updates: Partial<UserData>) => void
-  updateCredits: (amount: number) => void
-  reset: () => void
+  checkAuth: () => Promise<void>;
+  setUser: (user: User | null) => void;
+  updateUser: (data: Partial<User>) => Promise<void>;
+  clearUser: () => void;
+  signOut: () => Promise<void>;
 }
 
-/**
- * Store d'authentification avec persistance
- * Sauvegarde la session et les données utilisateur dans localStorage
- */
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      // État initial
-      user: null,
-      session: null,
-      isLoading: true,
-      isInitialized: false,
+export const useAuthStore = create<AuthStore>((set, get) => ({
+  user: null,
+  isLoading: true,
+  isInitialized: false,
 
-      // Définir l'utilisateur
-      setUser: (user) => {
-        console.log('🔥 AuthStore: setUser called, user:', !!user)
-        set({ user, isLoading: false })
-      },
+  checkAuth: async () => {
+    if (get().isInitialized) {
+      logger.debug('[AuthStore] Already initialized, skipping...');
+      return; // Déjà vérifié
+    }
 
-      // Définir la session
-      setSession: (session) => {
-        console.log('🔥 AuthStore: setSession called, session:', !!session)
-        set({ session })
-      },
+    try {
+      logger.debug('[AuthStore] Checking auth...');
+      const supabase = createClient();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      // Définir l'état de chargement
-      setLoading: (isLoading) => {
-        console.log('🔥 AuthStore: setLoading called, isLoading:', isLoading)
-        set({ isLoading })
-      },
-
-      // Marquer comme initialisé
-      setInitialized: (isInitialized) => {
-        console.log('🔥 AuthStore: setInitialized called, isInitialized:', isInitialized)
-        set({ isInitialized })
-      },
-
-      // Mettre à jour partiellement l'utilisateur
-      updateUser: (updates) => {
-        const currentUser = get().user
-        if (currentUser) {
-          set({ user: { ...currentUser, ...updates } })
-        }
-      },
-
-      // Mettre à jour le solde de crédits
-      updateCredits: (amount) => {
-        const currentUser = get().user
-        if (currentUser) {
-          set({
-            user: {
-              ...currentUser,
-              credits_balance: currentUser.credits_balance + amount,
-            },
-          })
-        }
-      },
-
-      // Réinitialiser le store (lors de la déconnexion)
-      reset: () => {
+      if (sessionError) {
+        logger.error('[AuthStore] Session error:', sessionError);
         set({
           user: null,
-          session: null,
           isLoading: false,
           isInitialized: true,
-        })
-      },
-    }),
-    {
-      name: 'renzo-auth-storage', // Nom de la clé dans localStorage
-      storage: createJSONStorage(() => localStorage),
-      // Ne persister que les données essentielles
-      partialize: (state) => ({
-        user: state.user,
-        session: state.session,
-      }),
-      // Callback après hydratation depuis localStorage
-      onRehydrateStorage: () => (state) => {
-        console.log('💾 AuthStore: onRehydrateStorage called, state:', !!state)
-        // Après hydratation, on force isLoading à true et isInitialized à false
-        // pour que le AuthProvider puisse vérifier la session
-        if (state) {
-          console.log('💾 AuthStore: Forcing isLoading=true, isInitialized=false after hydration')
-          console.log('💾 AuthStore: Before - user:', !!state.user, 'session:', !!state.session, 'isInitialized:', state.isInitialized)
-          state.isLoading = true
-          state.isInitialized = false
-          console.log('💾 AuthStore: After - isLoading:', state.isLoading, 'isInitialized:', state.isInitialized)
-        }
-      },
-    }
-  )
-)
+        });
+        return;
+      }
 
-/**
- * Sélecteurs utiles
- */
-export const useUser = () => useAuthStore((state) => state.user)
-export const useSession = () => useAuthStore((state) => state.session)
-export const useIsAuthenticated = () => useAuthStore((state) => !!state.session && !!state.user)
-export const useCreditsBalance = () => useAuthStore((state) => state.user?.credits_balance ?? 0)
+      logger.debug('[AuthStore] Session:', session ? 'found' : 'not found');
+
+      if (session?.user) {
+        logger.debug('[AuthStore] Fetching user data for:', session.user.id);
+
+        // Récupérer les infos complètes de l'utilisateur
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (userError) {
+          logger.error('[AuthStore] User data error:', userError);
+        }
+
+        logger.debug('[AuthStore] User data:', userData ? 'found' : 'not found');
+
+        set({
+          user: userData ? {
+            id: userData.id,
+            email: userData.email,
+            firstName: userData.first_name,
+            lastName: userData.last_name,
+            avatarUrl: userData.avatar_url,
+            phone: userData.phone,
+            company: userData.company,
+            address: userData.address,
+          } : null,
+          isLoading: false,
+          isInitialized: true,
+        });
+      } else {
+        logger.debug('[AuthStore] No session, setting user to null');
+        set({
+          user: null,
+          isLoading: false,
+          isInitialized: true,
+        });
+      }
+    } catch (error) {
+      logger.error('[AuthStore] Unexpected error in checkAuth:', error);
+      set({
+        user: null,
+        isLoading: false,
+        isInitialized: true,
+      });
+    }
+  },
+
+  setUser: (user) => {
+    set({ user, isLoading: false, isInitialized: true });
+  },
+
+  updateUser: async (data) => {
+    const currentUser = get().user;
+    if (!currentUser) return;
+
+    set({ isLoading: true });
+
+    try {
+      const supabase = createClient();
+      const updateData: any = {};
+
+      if (data.firstName !== undefined) updateData.first_name = data.firstName;
+      if (data.lastName !== undefined) updateData.last_name = data.lastName;
+      if (data.phone !== undefined) updateData.phone = data.phone;
+      if (data.company !== undefined) updateData.company = data.company;
+      if (data.address !== undefined) updateData.address = data.address;
+      if (data.avatarUrl !== undefined) updateData.avatar_url = data.avatarUrl;
+
+      const { error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', currentUser.id);
+
+      if (error) throw error;
+
+      // Mettre à jour le store
+      set({
+        user: { ...currentUser, ...data },
+        isLoading: false,
+      });
+    } catch (error: any) {
+      logger.error('[AuthStore] Error updating user:', error);
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
+  clearUser: () => {
+    set({ user: null, isLoading: false });
+  },
+
+  signOut: async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    set({ user: null, isLoading: false });
+  },
+}));

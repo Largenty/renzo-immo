@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
+import { statusCheckLimiter, checkRateLimit } from '@/lib/rate-limit'
+import { checkStatusRequestSchema, validateRequest } from '@/lib/validators/api-schemas'
+import { logger } from '@/lib/logger'
 
 /**
  * API route pour vérifier le statut d'une génération d'image NanoBanana
@@ -11,11 +14,21 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    imageId = body.imageId
 
-    if (!imageId) {
-      return NextResponse.json({ error: 'Image ID required' }, { status: 400 })
+    // ✅ ZOD VALIDATION: Valider le body de la requête
+    const validation = validateRequest(checkStatusRequestSchema, body)
+
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          error: validation.error,
+          details: validation.details,
+        },
+        { status: 400 }
+      )
     }
+
+    imageId = validation.data.imageId
 
     const supabase = await createClient()
 
@@ -26,6 +39,43 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // ✅ EMAIL VERIFICATION: Vérifier que l'email est confirmé
+    if (!user.confirmed_at) {
+      return NextResponse.json(
+        {
+          error: 'Email verification required',
+          message: 'Please verify your email before checking generation status',
+        },
+        { status: 403 }
+      )
+    }
+
+    // ✅ RATE LIMITING: Vérifier le rate limit par user ID
+    const { success, limit, remaining, reset } = await checkRateLimit(
+      statusCheckLimiter,
+      user.id
+    )
+
+    if (!success) {
+      return NextResponse.json(
+        {
+          error: 'Rate limit exceeded',
+          message: 'Too many status check requests. Please slow down.',
+          limit,
+          remaining,
+          reset: new Date(reset).toISOString(),
+        },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': limit.toString(),
+            'X-RateLimit-Remaining': remaining.toString(),
+            'X-RateLimit-Reset': reset.toString(),
+          },
+        }
+      )
     }
 
     // 1. Récupérer l'image avec son taskId
@@ -45,18 +95,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Vérifier qu'il y a bien un taskId
-    console.log('📋 Image metadata:', image.metadata)
+    logger.debug('📋 Image metadata:', image.metadata)
     const taskId = image.metadata?.nanobanana_task_id
 
     if (!taskId) {
-      console.error('❌ No taskId found in metadata:', image.metadata)
+      logger.error('❌ No taskId found in metadata:', image.metadata)
       return NextResponse.json({
         error: 'No task ID found for this image',
         metadata: image.metadata
       }, { status: 400 })
     }
 
-    console.log('🔍 Checking NanoBanana task status:', taskId)
+    logger.debug('🔍 Checking NanoBanana task status:', taskId)
 
     // 2. Appeler l'API NanoBanana pour vérifier le statut
     const nanoBananaApiKey = process.env.NANOBANANA_API_KEY
@@ -78,12 +128,12 @@ export async function POST(request: NextRequest) {
 
     if (!statusResponse.ok) {
       const errorText = await statusResponse.text()
-      console.error('❌ NanoBanana status check error:', errorText)
+      logger.error('❌ NanoBanana status check error:', errorText)
       throw new Error(`Failed to check task status: ${statusResponse.status}`)
     }
 
     const statusResult = await statusResponse.json()
-    console.log('📦 Task status:', JSON.stringify(statusResult, null, 2))
+    logger.debug('📦 Task status:', JSON.stringify(statusResult, null, 2))
 
     // 3. Vérifier le statut de la tâche avec successFlag
     // 0 = en cours, 1 = complété, 2 = échec création, 3 = échec génération
@@ -105,9 +155,9 @@ export async function POST(request: NextRequest) {
       statusResult.imageUrl,
     ].filter(Boolean)
 
-    console.log('🎯 successFlag:', successFlag)
-    console.log('🖼️ Possible URLs found:', possibleUrls)
-    console.log('📋 Full data object:', statusResult.data)
+    logger.debug('🎯 successFlag:', successFlag)
+    logger.debug('🖼️ Possible URLs found:', possibleUrls)
+    logger.debug('📋 Full data object:', statusResult.data)
 
     // Si l'image n'est pas encore prête (en cours)
     if (successFlag === 0) {
@@ -139,7 +189,7 @@ export async function POST(request: NextRequest) {
     const imageUrl = possibleUrls[0] // Prendre la première URL disponible
 
     if (successFlag === 1 && imageUrl) {
-      console.log('✅ Image ready! Using URL:', imageUrl)
+      logger.debug('✅ Image ready! Using URL:', imageUrl)
 
       // 4. Télécharger l'image générée
       const imageResponse = await fetch(imageUrl)
@@ -149,33 +199,35 @@ export async function POST(request: NextRequest) {
       const originalWidth = image.metadata?.original_width
       const originalHeight = image.metadata?.original_height
 
-      let finalImageBuffer = Buffer.from(generatedImageBuffer)
+      let imageBlob: Blob
 
       // 6. Redimensionner l'image aux dimensions EXACTES de l'original
       if (originalWidth && originalHeight) {
-        console.log(`🔄 Resizing image to exact original dimensions: ${originalWidth}x${originalHeight}`)
-        finalImageBuffer = await sharp(generatedImageBuffer)
+        logger.debug(`🔄 Resizing image to exact original dimensions: ${originalWidth}x${originalHeight}`)
+        const resizedBuffer = await sharp(Buffer.from(generatedImageBuffer))
           .resize(originalWidth, originalHeight, {
             fit: 'fill', // Force exact dimensions
             kernel: sharp.kernel.lanczos3 // High quality resampling
           })
           .png() // Garder en PNG pour la qualité
           .toBuffer()
-        console.log('✅ Image resized successfully')
+        imageBlob = new Blob([new Uint8Array(resizedBuffer)], { type: 'image/png' })
+        logger.debug('✅ Image resized successfully')
       } else {
-        console.warn('⚠️ Original dimensions not found in metadata, keeping generated size')
+        logger.warn('⚠️ Original dimensions not found in metadata, keeping generated size')
+        imageBlob = new Blob([new Uint8Array(generatedImageBuffer)], { type: 'image/png' })
       }
 
       // 7. Uploader sur Supabase Storage
       const fileName = `transformed-${Date.now()}.png`
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('images')
-        .upload(`${image.project_id}/${fileName}`, finalImageBuffer, {
+        .upload(`${image.project_id}/${fileName}`, imageBlob, {
           contentType: 'image/png',
         })
 
       if (uploadError) {
-        console.error('Storage upload error:', uploadError)
+        logger.error('Storage upload error:', uploadError)
         throw new Error('Failed to upload transformed image')
       }
 
@@ -184,7 +236,7 @@ export async function POST(request: NextRequest) {
         data: { publicUrl },
       } = supabase.storage.from('images').getPublicUrl(uploadData.path)
 
-      console.log('✅ Image uploaded to Supabase Storage:', publicUrl)
+      logger.debug('✅ Image uploaded to Supabase Storage:', publicUrl)
 
       // 9. Mettre à jour l'image avec le résultat
       const completedAt = new Date().toISOString()
@@ -203,11 +255,11 @@ export async function POST(request: NextRequest) {
         .eq('id', imageId)
 
       if (updateError) {
-        console.error('Error updating image:', updateError)
+        logger.error('Error updating image:', updateError)
         throw new Error('Failed to update image status')
       }
 
-      console.log('🎉 Image generation completed!')
+      logger.debug('🎉 Image generation completed!')
 
       return NextResponse.json({
         success: true,
@@ -224,7 +276,7 @@ export async function POST(request: NextRequest) {
       message: 'Unknown status, keep polling',
     })
   } catch (error: any) {
-    console.error('Check generation status error:', error)
+    logger.error('Check generation status error:', error)
 
     return NextResponse.json(
       {

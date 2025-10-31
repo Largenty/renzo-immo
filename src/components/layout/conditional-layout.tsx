@@ -1,7 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { Navbar } from "./navbar";
 import { Footer } from "./footer";
 
@@ -12,23 +12,26 @@ import { Footer } from "./footer";
  * - Les pages du dashboard (/dashboard/*)
  * - Les pages d'authentification (/auth/*)
  */
-export function ConditionalLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const [isClient, setIsClient] = useState(false);
 
-  // Éviter l'erreur d'hydratation en attendant que le composant soit monté côté client
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+function ConditionalLayoutContent({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
 
   // Ne pas afficher la navbar/footer sur les pages dashboard et auth
   const isPublicPage = !pathname?.startsWith('/dashboard') && !pathname?.startsWith('/auth');
 
   return (
     <>
-      {isClient && isPublicPage && <Navbar />}
+      {isPublicPage && <Navbar />}
       <main className="min-h-screen">{children}</main>
-      {isClient && isPublicPage && <Footer />}
+      {isPublicPage && <Footer />}
     </>
+  );
+}
+
+export function ConditionalLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<main className="min-h-screen">{children}</main>}>
+      <ConditionalLayoutContent>{children}</ConditionalLayoutContent>
+    </Suspense>
   );
 }

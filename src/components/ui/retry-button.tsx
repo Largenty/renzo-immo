@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { retryWithBackoff } from "@/lib/errors";
 import { toast } from "sonner";
+import { logger } from '@/lib/logger';
 
 interface RetryButtonProps {
   onRetry: () => Promise<void>;
@@ -51,7 +52,7 @@ export function RetryButton({
         description: "L'action a été effectuée avec succès",
       });
     } catch (error) {
-      console.error("Retry failed after all attempts:", error);
+      logger.error("Retry failed after all attempts:", error);
       toast.error("Échec après plusieurs tentatives", {
         description: "Veuillez réessayer plus tard ou contacter le support",
       });

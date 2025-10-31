@@ -172,7 +172,7 @@ export function SignupForm({ onSubmit, onGoogleSignIn, isLoading = false }: Sign
         Vous avez déjà un compte ?{" "}
         <Link
           href="/auth/login"
-          className="text-blue-600 hover:text-blue-700 font-semibold"
+          className="group bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-md btn-glow transition-all duration-300 shadow-lg"
         >
           Se connecter
         </Link>

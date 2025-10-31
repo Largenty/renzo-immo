@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -22,6 +24,83 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+
+  // ✅ Activer l'instrumentation pour Sentry
+  experimental: {
+    instrumentationHook: true,
+  },
+
+  // ✅ FIX WEBPACK WARNING: Optimiser le cache pour les gros fichiers
+  webpack: (config, { isServer }) => {
+    // Ignorer le warning pour les gros strings dans le cache
+    config.infrastructureLogging = {
+      level: 'error',
+    };
+
+    return config;
+  },
+
+  // ✅ SECURITY HEADERS: Protection contre XSS, clickjacking, etc.
+  async headers() {
+    return [
+      {
+        // Appliquer à toutes les routes
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on',
+          },
+          {
+            // HSTS: Force HTTPS pendant 2 ans (incluant sous-domaines)
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
+          {
+            // Prévient le clickjacking (uniquement sur même origine)
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            // Bloque le sniffing de type MIME
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            // Active la protection XSS du navigateur
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            // Contrôle les informations du Referer header
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin',
+          },
+          {
+            // Restreint les permissions du navigateur
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+        ],
+      },
+    ]
+  },
 };
 
-export default nextConfig;
+// Sentry configuration
+const sentryWebpackPluginOptions = {
+  // Pour ne pas uploader les sourcemaps en dev
+  silent: process.env.NODE_ENV !== 'production',
+
+  // Désactiver l'upload des sourcemaps si pas de token configuré
+  dryRun: !process.env.SENTRY_AUTH_TOKEN,
+
+  // Organisation et projet Sentry (à configurer)
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+};
+
+// Exporter la config avec Sentry seulement si DSN est configuré
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
+  : nextConfig;

@@ -23,21 +23,24 @@ import {
   MoreHorizontal,
   Loader2,
 } from "lucide-react";
-import type { TransformationType, RoomType } from "@/types/dashboard";
+import type { RoomType } from "@/../types/dashboard";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useAllTransformationTypes } from "@/lib/hooks";
-import { useAuthStore } from "@/lib/stores/auth-store";
-import { getAllTransformationTypes } from "@/lib/transformation-types";
+import { useAllTransformationTypes } from "@/domain/styles";
+import type { TransformationType } from "@/domain/styles/models/transformation-style";
+import { useCurrentUser } from "@/domain/auth";
 import { compressImage, isValidImageFile, isFileSizeValid, formatFileSize } from "@/lib/image-utils";
 import { toast } from "sonner";
+import { logger } from '@/lib/logger';
+import { FurnitureSelectorDialog } from "@/components/furniture/furniture-selector-dialog";
 
 interface UploadedFile {
   id: string;
   file: File;
   preview: string;
-  transformationType?: TransformationType;
+  transformationType?: TransformationType; // Slug (ex: "home_staging_moderne")
   withFurniture?: boolean;
+  furnitureIds?: string[];
   customPrompt?: string;
   roomType?: RoomType;
   customRoom?: string;
@@ -63,17 +66,24 @@ const roomTypes = [
 
 export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUploaderProps) {
   // Auth state
-  const { isInitialized, user } = useAuthStore();
-  const shouldFetch = isInitialized && !!user;
+  const { data: user } = useCurrentUser();
 
   // Fetch transformation types from database
-  const { data: dbTransformationTypes = [] } = useAllTransformationTypes(shouldFetch);
-  const transformationTypes = getAllTransformationTypes(dbTransformationTypes);
+  const { data: transformationTypes = [], isLoading: isLoadingTypes } = useAllTransformationTypes(user?.id);
+
+  // 🐛 DEBUG: Vérifier les types chargés
+  logger.debug('🎨 Transformation types loaded:', {
+    total: transformationTypes.length,
+    custom: transformationTypes.filter(t => (t as any).isCustom).length,
+    types: transformationTypes.map(t => ({ value: t.value, label: t.label, isCustom: (t as any).isCustom }))
+  });
 
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [step, setStep] = useState<"upload" | "configure">("upload");
   const [bulkMode, setBulkMode] = useState(true); // true = même type pour tout, false = individuel
+  const [furnitureDialogOpen, setFurnitureDialogOpen] = useState(false);
+  const [currentFileIdForFurniture, setCurrentFileIdForFurniture] = useState<string | null>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -142,7 +152,7 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
               format: 'jpeg',
             });
 
-            console.log(
+            logger.debug(
               `✅ ${file.name}: ${formatFileSize(compressed.originalSize)} → ${formatFileSize(compressed.compressedSize)} (${compressed.compressionRatio}% réduit)`
             );
 
@@ -155,7 +165,7 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
               compressedSize: compressed.compressedSize,
             };
           } catch (error) {
-            console.error(`❌ Erreur compression ${file.name}:`, error);
+            logger.error(`❌ Erreur compression ${file.name}:`, error);
             // Utiliser l'original si la compression échoue
             return {
               id: Math.random().toString(36).substr(2, 9),
@@ -175,6 +185,7 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
         {
           id: toastId,
           description: `Taille optimisée pour un upload rapide`,
+          duration: 4000,
         }
       );
 
@@ -182,10 +193,11 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
         setStep("configure");
       }
     } catch (error) {
-      console.error('Erreur lors du traitement des fichiers:', error);
+      logger.error('Erreur lors du traitement des fichiers:', error);
       toast.error("Erreur lors du traitement", {
         id: toastId,
         description: "Certains fichiers n'ont pas pu être traités",
+        duration: 4000,
       });
     }
   };
@@ -212,16 +224,92 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
     );
   };
 
-  const toggleFurniture = (id: string, withFurniture: boolean) => {
+  const toggleFurniture = async (id: string, withFurniture: boolean) => {
     setFiles((prev) =>
       prev.map((f) => (f.id === id ? { ...f, withFurniture } : f))
     );
+
+    // 🎯 AUTO-LOAD: Si "avec meubles" activé, charger le preset par défaut
+    if (withFurniture) {
+      const file = files.find(f => f.id === id);
+      if (file?.transformationType && file?.roomType) {
+        try {
+          logger.debug('[ImageUploader] Auto-loading furniture preset for file:', {
+            fileId: id,
+            transformationType: file.transformationType,
+            roomType: file.roomType,
+          });
+
+          const params = new URLSearchParams({
+            transformationTypeId: file.transformationType, // Utiliser le slug
+            roomType: file.roomType,
+          });
+
+          const response = await fetch(`/api/furniture/preset?${params}`);
+          if (response.ok) {
+            const data = await response.json();
+            const furnitureIds = data.furnitureIds || [];
+
+            logger.debug('[ImageUploader] Preset loaded:', {
+              furnitureCount: furnitureIds.length,
+              furnitureIds,
+            });
+
+            if (furnitureIds.length > 0) {
+              updateFurnitureIds(id, furnitureIds);
+              toast.success('Meubles par défaut ajoutés', {
+                description: `${furnitureIds.length} meubles sélectionnés automatiquement`,
+              });
+            }
+          }
+        } catch (error) {
+          logger.error('[ImageUploader] Error loading furniture preset:', error);
+          // Silent fail - l'utilisateur peut toujours personnaliser manuellement
+        }
+      }
+    }
   };
 
-  const applyBulkFurniture = (withFurniture: boolean) => {
+  const applyBulkFurniture = async (withFurniture: boolean) => {
     setFiles((prev) =>
       prev.map((f) => ({ ...f, withFurniture }))
     );
+
+    // 🎯 AUTO-LOAD: Si "avec meubles" activé, charger le preset par défaut
+    if (withFurniture && files[0]?.transformationType && files[0]?.roomType) {
+      try {
+        logger.debug('[ImageUploader] Auto-loading furniture preset:', {
+          transformationType: files[0].transformationType,
+          roomType: files[0].roomType,
+        });
+
+        const params = new URLSearchParams({
+          transformationTypeId: files[0].transformationType, // Utiliser le slug
+          roomType: files[0].roomType,
+        });
+
+        const response = await fetch(`/api/furniture/preset?${params}`);
+        if (response.ok) {
+          const data = await response.json();
+          const furnitureIds = data.furnitureIds || [];
+
+          logger.debug('[ImageUploader] Preset loaded:', {
+            furnitureCount: furnitureIds.length,
+            furnitureIds,
+          });
+
+          if (furnitureIds.length > 0) {
+            applyBulkFurnitureIds(furnitureIds);
+            toast.success('Meubles par défaut ajoutés', {
+              description: `${furnitureIds.length} meubles sélectionnés automatiquement`,
+            });
+          }
+        }
+      } catch (error) {
+        logger.error('[ImageUploader] Error loading furniture preset:', error);
+        // Silent fail - l'utilisateur peut toujours personnaliser manuellement
+      }
+    }
   };
 
   const updateCustomPrompt = (id: string, customPrompt: string) => {
@@ -260,7 +348,67 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
     );
   };
 
+  const updateFurnitureIds = (id: string, furnitureIds: string[]) => {
+    setFiles((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, furnitureIds } : f))
+    );
+  };
+
+  const applyBulkFurnitureIds = (furnitureIds: string[]) => {
+    setFiles((prev) =>
+      prev.map((f) => ({ ...f, furnitureIds }))
+    );
+  };
+
+  const openFurnitureSelector = (fileId: string | null = null) => {
+    // 🐛 DEBUG: Log l'ouverture du dialogue
+    logger.debug('[ImageUploader] Opening furniture selector:', {
+      fileId,
+      mode: fileId ? 'individual' : 'bulk',
+      hasTransformationType: !!files[0]?.transformationType,
+      transformationType: files[0]?.transformationType,
+      hasRoomType: !!files[0]?.roomType,
+      roomType: files[0]?.roomType,
+    });
+
+    setCurrentFileIdForFurniture(fileId);
+    setFurnitureDialogOpen(true);
+  };
+
+  const handleFurnitureSelect = (furnitureIds: string[]) => {
+    // 🐛 DEBUG: Log la sélection de meubles
+    logger.debug('[ImageUploader] Furniture selected:', {
+      furnitureCount: furnitureIds.length,
+      furnitureIds,
+      mode: currentFileIdForFurniture ? 'individual' : 'bulk',
+      fileId: currentFileIdForFurniture,
+    });
+
+    if (currentFileIdForFurniture) {
+      // Mode individuel - mettre à jour un seul fichier
+      updateFurnitureIds(currentFileIdForFurniture, furnitureIds);
+    } else {
+      // Mode bulk - mettre à jour tous les fichiers
+      applyBulkFurnitureIds(furnitureIds);
+    }
+  };
+
   const handleSubmit = () => {
+    // 🐛 DEBUG: Log avant submission finale
+    logger.debug('[ImageUploader] Submitting files:', {
+      fileCount: files.length,
+      files: files.map(f => ({
+        id: f.id,
+        name: f.file.name,
+        transformationType: f.transformationType,
+        withFurniture: f.withFurniture,
+        furnitureIds: f.furnitureIds,
+        furnitureCount: f.furnitureIds?.length || 0,
+        roomType: f.roomType,
+        customRoom: f.customRoom,
+      })),
+    });
+
     onUploadComplete?.(files);
   };
 
@@ -312,7 +460,7 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
                     PNG, JPG, WEBP
                   </span>
                   <span>•</span>
-                  <span>Jusqu'à 10MB par image</span>
+                  <span>Jusqu&apos;à 10MB par image</span>
                   <span>•</span>
                   <span>Plusieurs fichiers acceptés</span>
                 </div>
@@ -519,7 +667,7 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
                           <Label className="text-sm text-slate-700 font-semibold mb-3 block">
                             Options de meubles
                           </Label>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 mb-3">
                             <Button
                               size="sm"
                               variant={files[0]?.withFurniture === true ? "default" : "outline"}
@@ -537,6 +685,22 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
                               Sans meubles
                             </Button>
                           </div>
+                          {files[0]?.withFurniture === true && files[0]?.roomType && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openFurnitureSelector(null)}
+                              className="w-full gap-2"
+                            >
+                              <Sofa size={16} />
+                              Personnaliser les meubles
+                              {files[0]?.furnitureIds && files[0].furnitureIds.length > 0 && (
+                                <span className="ml-auto text-xs text-blue-600">
+                                  ({files[0].furnitureIds.length} sélectionnés)
+                                </span>
+                              )}
+                            </Button>
+                          )}
                         </div>
                       );
                     }
@@ -825,6 +989,22 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
                                 Sans meubles
                               </Button>
                             </div>
+                            {uploadedFile.withFurniture === true && uploadedFile.roomType && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openFurnitureSelector(uploadedFile.id)}
+                                className="w-full gap-2"
+                              >
+                                <Sofa size={16} />
+                                Personnaliser les meubles
+                                {uploadedFile.furnitureIds && uploadedFile.furnitureIds.length > 0 && (
+                                  <span className="ml-auto text-xs text-blue-600">
+                                    ({uploadedFile.furnitureIds.length} sélectionnés)
+                                  </span>
+                                )}
+                              </Button>
+                            )}
                           </div>
                         );
                       }
@@ -945,6 +1125,22 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
             </Button>
           </div>
         </>
+      )}
+
+      {/* Furniture Selector Dialog */}
+      {furnitureDialogOpen && files[0]?.transformationType && files[0]?.roomType && (
+        <FurnitureSelectorDialog
+          open={furnitureDialogOpen}
+          onOpenChange={setFurnitureDialogOpen}
+          transformationTypeId={files[0].transformationType}
+          roomType={files[0].roomType}
+          onSelect={handleFurnitureSelect}
+          initialSelection={
+            currentFileIdForFurniture
+              ? files.find(f => f.id === currentFileIdForFurniture)?.furnitureIds
+              : files[0]?.furnitureIds
+          }
+        />
       )}
     </div>
   );

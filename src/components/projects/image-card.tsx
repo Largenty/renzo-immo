@@ -12,7 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import Image from "next/image";
-import type { Image as ImageType } from "@/lib/hooks";
+import type { Image as ImageType } from "@/domain/images";
 
 interface ImageCardProps {
   image: ImageType;
@@ -39,7 +39,7 @@ export function ImageCard({
         {/* Original */}
         <div className="relative h-48 bg-slate-100 border-r border-slate-200">
           <Image
-            src={image.original_url}
+            src={image.originalUrl}
             alt="Original"
             fill
             loading="lazy"
@@ -53,10 +53,10 @@ export function ImageCard({
 
         {/* Transformed */}
         <div className="relative h-48 bg-slate-100">
-          {image.transformed_url ? (
+          {image.transformedUrl ? (
             <>
               <Image
-                src={image.transformed_url}
+                src={image.transformedUrl}
                 alt="Transformé"
                 fill
                 loading="lazy"
@@ -119,8 +119,8 @@ export function ImageCard({
               className="p-0 h-8 w-8 flex-shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
-                if (image.transformed_url) {
-                  onDownload(image.transformed_url, `${image.id}.png`);
+                if (image.transformedUrl) {
+                  onDownload(image.transformedUrl, `${image.id}.png`);
                 }
               }}
               title="Télécharger"
@@ -156,7 +156,7 @@ export function ImageCard({
                   <Loader2 size={14} className="mr-1 animate-spin" />
                   <span className="hidden sm:inline">Génération...</span>
                 </>
-              ) : image.transformed_url ? (
+              ) : image.transformedUrl ? (
                 <>
                   <RotateCcw size={14} className="mr-1" />
                   <span className="hidden sm:inline">Regénérer (1 crédit)</span>
@@ -206,9 +206,9 @@ export function ImageCard({
         {/* Failed Actions */}
         {image.status === "failed" && (
           <div className="space-y-2">
-            {image.error_message && (
+            {image.errorMessage && (
               <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
-                {image.error_message}
+                {image.errorMessage}
               </div>
             )}
             {onGenerate && (

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/components/providers/auth-provider";
+import { AuthStoreProvider } from "@/components/providers/auth-store-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { SEO_CONFIG, JSON_LD_ORGANIZATION, JSON_LD_PRODUCT } from "@/config/seo";
 import { ConditionalLayout } from "@/components/layout/conditional-layout";
@@ -46,10 +47,19 @@ export default function RootLayout({
       </head>
       <body className="font-sans">
         <QueryProvider>
-          <AuthProvider>
-            <ConditionalLayout>{children}</ConditionalLayout>
-            <Toaster position="bottom-right" />
-          </AuthProvider>
+          <AuthStoreProvider>
+            <AuthProvider>
+              <ConditionalLayout>{children}</ConditionalLayout>
+              <Toaster
+                position="bottom-right"
+                closeButton
+                richColors
+                toastOptions={{
+                  duration: 4000,
+                }}
+              />
+            </AuthProvider>
+          </AuthStoreProvider>
         </QueryProvider>
       </body>
     </html>

@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { useCreateProjectWithCover } from "@/lib/hooks";
+import { useCreateProject } from "@/domain/projects";
+import { useCurrentUser } from "@/domain/auth";
 import Link from "next/link";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@/components/projects/project-form";
 import { InfoCard } from "@/components/dashboard/atoms/info-card";
 import { TipsList } from "@/components/dashboard/molecules/tips-list";
+import { logger } from '@/lib/logger';
 
 const projectTips = [
   {
@@ -26,29 +28,33 @@ const projectTips = [
 
 export default function NewProjectPage() {
   const router = useRouter();
-  const createProject = useCreateProjectWithCover();
+  const { data: user } = useCurrentUser();
+  const createProject = useCreateProject(user?.id);
 
   const handleSubmit = async (data: ProjectFormData, coverImage: File | null) => {
-    console.log("🚀 Creating project...", {
+    if (!user?.id) {
+      logger.error("❌ No user ID");
+      return;
+    }
+
+    logger.debug("🚀 Creating project...", {
       name: data.name,
       hasCover: !!coverImage,
     });
 
     try {
       const result = await createProject.mutateAsync({
-        project: {
-          name: data.name,
-          address: data.address || undefined,
-          description: data.description || undefined,
-        },
+        name: data.name,
+        address: data.address || undefined,
+        description: data.description || undefined,
         coverImage: coverImage || undefined,
       });
 
-      console.log("✅ Project created successfully:", result);
-      console.log("📍 Redirecting to /dashboard/projects");
+      logger.debug("✅ Project created successfully:", result);
+      logger.debug("📍 Redirecting to /dashboard/projects");
       router.push("/dashboard/projects");
     } catch (error) {
-      console.error("❌ Error creating project:", error);
+      logger.error("❌ Error creating project:", error);
     }
   };
 

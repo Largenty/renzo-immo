@@ -1,15 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { signUp, signInWithGoogle } from "@/lib/auth/actions";
+import { useSignUp } from "@/domain/auth";
 import { AuthCard, SignupForm, type SignupFormData } from "@/components/auth";
 import Link from "next/link";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const signUpMutation = useSignUp();
 
   const handleSubmit = async (data: SignupFormData) => {
     // Validation
@@ -20,9 +19,39 @@ export default function SignupPage() {
       return;
     }
 
-    if (data.password.length < 8) {
+    // ✅ Validation mot de passe conforme au serveur (12 caractères + complexité)
+    if (data.password.length < 12) {
       toast.error("Erreur", {
-        description: "Le mot de passe doit contenir au moins 8 caractères",
+        description: "Le mot de passe doit contenir au moins 12 caractères",
+      });
+      return;
+    }
+
+    // Vérifier la complexité
+    if (!/[a-z]/.test(data.password)) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins une minuscule",
+      });
+      return;
+    }
+
+    if (!/[A-Z]/.test(data.password)) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins une majuscule",
+      });
+      return;
+    }
+
+    if (!/[0-9]/.test(data.password)) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins un chiffre",
+      });
+      return;
+    }
+
+    if (!/[^a-zA-Z0-9]/.test(data.password)) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins un caractère spécial (!@#$%^&*...)",
       });
       return;
     }
@@ -34,10 +63,8 @@ export default function SignupPage() {
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      const result = await signUp({
+      const result = await signUpMutation.mutateAsync({
         email: data.email,
         password: data.password,
         firstName: data.firstName,
@@ -61,25 +88,11 @@ export default function SignupPage() {
       toast.error("Erreur", {
         description: "Une erreur est survenue lors de l'inscription",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
-    try {
-      const result = await signInWithGoogle();
-
-      if (!result.success && result.error) {
-        toast.error("Erreur Google", {
-          description: result.error,
-        });
-      }
-    } catch {
-      toast.error("Erreur", {
-        description: "Impossible de se connecter avec Google",
-      });
-    }
+    toast.info("Fonctionnalité Google OAuth à implémenter");
   };
 
   return (
@@ -90,7 +103,7 @@ export default function SignupPage() {
       <SignupForm
         onSubmit={handleSubmit}
         onGoogleSignIn={handleGoogleSignIn}
-        isLoading={isLoading}
+        isLoading={signUpMutation.isPending}
       />
 
       <div className="text-center mt-6">

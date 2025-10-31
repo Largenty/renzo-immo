@@ -2,22 +2,15 @@
 
 import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useAuthStore } from "@/lib/stores/auth-store";
+import { useCurrentUser } from "@/domain/auth";
+import { useProject, useDeleteProject } from "@/domain/projects";
+import { useProjectImages, useDeleteImage, useUploadImage, useGenerateImage, useImagePolling } from "@/domain/images";
+import { useAllTransformationTypes } from "@/domain/styles";
 import { Card } from "@/components/ui";
 import { ImageUploader } from "@/components/upload/image-uploader";
 import { Upload } from "lucide-react";
 import type { RoomType } from "@/../types/dashboard";
-import { getTransformationLabel } from "@/lib/transformation-types";
-import {
-  useProject,
-  useProjectImages,
-  useDeleteImage,
-  useDeleteProject,
-  useUploadImage,
-  useGenerateImage,
-  useAllTransformationTypes,
-} from "@/lib/hooks";
-import type { Image as ImageType } from "@/lib/hooks";
+import type { Image as ImageType } from "@/domain/images";
 import { downloadImagesAsZip } from "@/lib/export-utils";
 import { ShareDialog } from "@/components/ui/share-dialog";
 import { toast } from "sonner";
@@ -28,17 +21,20 @@ import {
   EmptyState,
   ProjectNotFound,
   ProjectLoadingSkeleton,
+  ProjectCoverBanner,
 } from "@/components/projects";
 import { ImageGridCard } from "@/components/projects/molecules/image-grid-card";
 import { ImageViewerDialog } from "@/components/projects/molecules/image-viewer-dialog";
 import { DeleteConfirmDialog } from "@/components/projects/molecules/delete-confirm-dialog";
 import { DeleteProjectDialog } from "@/components/projects/molecules/delete-project-dialog";
+import { logger } from '@/lib/logger';
 
 interface UploadedFile {
   file: File;
-  transformationType: string;
+  transformationType?: string; // ⚠️ OPTIONAL: Pour matcher l'interface de ImageUploader
   customPrompt?: string;
   withFurniture?: boolean;
+  furnitureIds?: string[]; // ✅ AJOUTÉ: IDs des meubles sélectionnés
   roomType?: RoomType;
   customRoom?: string; // Valeur personnalisée si roomType === "autre"
 }
@@ -47,30 +43,38 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
-  const { isInitialized, user } = useAuthStore();
+  const { data: user } = useCurrentUser();
 
-  // Attendre que l'auth soit initialisée avant de charger
-  const shouldFetch = isInitialized && !!user;
+  logger.debug('🎬 Project detail page - projectId:', projectId, 'user:', user?.id);
 
-  console.log('🎬 Project detail page - projectId:', projectId, 'shouldFetch:', shouldFetch, 'user:', user?.id);
-
-  // Fetch real data - Ne charger QUE si l'utilisateur est prêt
-  const { data: project, isLoading: isLoadingProject } = useProject(projectId, shouldFetch);
-  const { data: images = [], isLoading: isLoadingImages } = useProjectImages(projectId, shouldFetch);
-  const { data: dbTransformationTypes = [] } = useAllTransformationTypes(shouldFetch);
+  // Fetch real data
+  const { data: project, isLoading: isLoadingProject } = useProject(user?.id, projectId);
+  const { data: images = [], isLoading: isLoadingImages } = useProjectImages(projectId);
+  const { data: transformationTypes = [], isLoading: isLoadingTypes } = useAllTransformationTypes(user?.id);
   const deleteImageMutation = useDeleteImage();
-  const deleteProjectMutation = useDeleteProject();
+  const deleteProjectMutation = useDeleteProject(user?.id);
   const uploadImageMutation = useUploadImage();
   const generateImageMutation = useGenerateImage();
 
   const [selectedImage, setSelectedImage] = useState<ImageType | null>(null);
   const [viewMode, setViewMode] = useState<"all" | "completed" | "pending">("all");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+
+  // Debug: log quand uploadDialogOpen change
+  logger.debug('📤 Upload dialog state:', uploadDialogOpen);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
   const [generatingImageId, setGeneratingImageId] = useState<string | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // ✅ POLLING: Vérifier automatiquement le statut des images en cours de traitement
+  const { pollingCount, isPolling } = useImagePolling({
+    images,
+    projectId,
+    enabled: true, // Toujours actif quand on est sur la page
+    interval: 5000, // Vérifier toutes les 5 secondes
+  });
 
   const filteredImages = useMemo(() => {
     return images.filter((img) => {
@@ -93,28 +97,55 @@ export default function ProjectDetailPage() {
   const isLoading = isLoadingProject || isLoadingImages;
 
   const handleUploadComplete = async (uploadedFiles: UploadedFile[]) => {
+    if (!user?.id) {
+      logger.error("No user ID");
+      return;
+    }
+
     try {
       // Upload chaque fichier en parallèle
       await Promise.all(
         uploadedFiles.map((uploadedFile) => {
+          // ✅ VALIDATION: S'assurer que transformationType est défini
+          if (!uploadedFile.transformationType) {
+            logger.error('[Upload] Missing transformation type for file:', uploadedFile.file.name);
+            toast.error('Erreur', {
+              description: 'Veuillez sélectionner un style de transformation',
+            });
+            throw new Error('Missing transformation type');
+          }
+
           // Si roomType est "autre", utiliser customRoom à la place
           const finalRoomType = uploadedFile.roomType === "autre"
             ? uploadedFile.customRoom
             : uploadedFile.roomType;
 
-          return uploadImageMutation.mutateAsync({
-            projectId,
-            file: uploadedFile.file,
+          // 🐛 DEBUG: Log des données avant upload
+          logger.debug('[Upload] Données envoyées:', {
             transformationType: uploadedFile.transformationType,
-            customPrompt: uploadedFile.customPrompt,
             withFurniture: uploadedFile.withFurniture,
+            furnitureIds: uploadedFile.furnitureIds,
+            furnitureCount: uploadedFile.furnitureIds?.length || 0,
             roomType: finalRoomType,
+          });
+
+          return uploadImageMutation.mutateAsync({
+            userId: user.id,
+            input: {
+              projectId,
+              file: uploadedFile.file,
+              transformationType: uploadedFile.transformationType, // 🔄 Utiliser le slug string
+              customPrompt: uploadedFile.customPrompt,
+              withFurniture: uploadedFile.withFurniture,
+              furnitureIds: uploadedFile.furnitureIds,
+              roomType: finalRoomType as any,
+            },
           });
         })
       );
       setUploadDialogOpen(false);
     } catch (error) {
-      console.error("Error uploading images:", error);
+      logger.error("Error uploading images:", error);
     }
   };
 
@@ -123,18 +154,20 @@ export default function ProjectDetailPage() {
       await deleteImageMutation.mutateAsync({ imageId: id, projectId });
       setDeleteConfirmId(null);
     } catch (error) {
-      console.error("Error deleting image:", error);
+      logger.error("Error deleting image:", error);
       // Keep modal open so user can retry
     }
   };
 
   const handleDeleteProject = async () => {
+    if (!user?.id) return;
+
     try {
       await deleteProjectMutation.mutateAsync(projectId);
       setDeleteProjectDialogOpen(false);
       router.push("/dashboard/projects");
     } catch (error) {
-      console.error("Error deleting project:", error);
+      logger.error("Error deleting project:", error);
       // Keep modal open so user can retry
     }
   };
@@ -155,7 +188,7 @@ export default function ProjectDetailPage() {
 
       window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
-      console.error('Error downloading image:', error);
+      logger.error('Error downloading image:', error);
     }
   };
 
@@ -165,7 +198,7 @@ export default function ProjectDetailPage() {
     setIsExporting(true);
 
     try {
-      const completedImages = images.filter(img => img.status === 'completed' && img.transformed_url);
+      const completedImages = images.filter(img => img.status === 'completed' && img.transformedUrl);
 
       if (completedImages.length === 0) {
         toast.error("Aucune image à exporter", {
@@ -176,7 +209,7 @@ export default function ProjectDetailPage() {
 
       await downloadImagesAsZip(
         completedImages.map(img => ({
-          url: img.transformed_url!,
+          url: img.transformedUrl!,
           filename: `${img.id}.jpg`,
         })),
         {
@@ -184,7 +217,7 @@ export default function ProjectDetailPage() {
           includeOriginals: false,
         },
         (progress) => {
-          console.log(`Export progress: ${progress}%`);
+          logger.debug(`Export progress: ${progress}%`);
         }
       );
 
@@ -192,7 +225,7 @@ export default function ProjectDetailPage() {
         description: `${completedImages.length} image${completedImages.length > 1 ? 's' : ''} exportée${completedImages.length > 1 ? 's' : ''}`,
       });
     } catch (error) {
-      console.error("Export error:", error);
+      logger.error("Export error:", error);
       toast.error("Erreur lors de l'export", {
         description: "Impossible de générer le fichier ZIP",
       });
@@ -211,6 +244,12 @@ export default function ProjectDetailPage() {
   if (!project) {
     return <ProjectNotFound />;
   }
+
+  // Helper pour obtenir le label d'un type de transformation
+  const getTransformationLabel = (typeId: string) => {
+    const type = transformationTypes.find(t => t.value === typeId);
+    return type?.label || typeId;
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -234,6 +273,12 @@ export default function ProjectDetailPage() {
         }
       />
 
+      {/* Cover Image */}
+      <ProjectCoverBanner
+        coverImageUrl={project.coverImageUrl}
+        projectName={project.name}
+      />
+
       {/* Stats */}
       <ProjectStats {...stats} />
 
@@ -247,110 +292,101 @@ export default function ProjectDetailPage() {
       {/* Images Grid */}
       {filteredImages.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredImages.map((imagePair) => (
+          {filteredImages.map((image) => (
             <ImageGridCard
-              key={imagePair.id}
-              image={imagePair}
-              transformationLabel={getTransformationLabel(
-                imagePair.transformation_type,
-                dbTransformationTypes
-              )}
+              key={image.id}
+              image={image}
+              transformationLabel={getTransformationLabel(image.transformationType)}
               projectName={project.name}
               generatingImageId={generatingImageId}
-              onView={() => setSelectedImage(imagePair)}
+              onView={() => setSelectedImage(image)}
               onDownload={downloadImage}
-              onDelete={() => setDeleteConfirmId(imagePair.id)}
-              onGenerate={() => {
-                setGeneratingImageId(imagePair.id);
-                generateImageMutation.mutate(
-                  {
-                    imageId: imagePair.id,
-                    projectId,
-                  },
-                  {
-                    onSettled: () => {
-                      setGeneratingImageId(null);
-                    },
-                  }
-                );
+              onDelete={() => setDeleteConfirmId(image.id)}
+              onGenerate={async (imageId) => {
+                setGeneratingImageId(imageId);
+                try {
+                  await generateImageMutation.mutateAsync(imageId);
+                } catch (error) {
+                  logger.error('Error generating image:', error);
+                } finally {
+                  setGeneratingImageId(null);
+                }
               }}
             />
           ))}
         </div>
-      ) : viewMode === "all" ? (
-        <EmptyState
-          title="Aucune image"
-          description="Ajoutez vos premières photos pour commencer"
-          actionLabel="Ajouter des photos"
-          onAction={() => setUploadDialogOpen(true)}
-        />
       ) : (
-        <Card className="modern-card p-12 text-center">
-          <Upload size={48} className="text-slate-400 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-slate-900 mb-2">
-            Aucune image
-          </h3>
-          <p className="text-slate-600">
-            Aucune image dans la catégorie &ldquo;{viewMode === "completed" ? "Terminées" : "En cours"}&rdquo;
-          </p>
+        <Card className="modern-card p-12">
+          <EmptyState
+            icon={Upload}
+            title={
+              viewMode === "all"
+                ? "Aucune image"
+                : viewMode === "completed"
+                ? "Aucune image terminée"
+                : "Aucune image en attente"
+            }
+            description={
+              viewMode === "all"
+                ? "Commencez par uploader vos premières images"
+                : viewMode === "completed"
+                ? "Aucune transformation terminée pour le moment"
+                : "Toutes vos images ont été transformées"
+            }
+            action={
+              viewMode === "all"
+                ? {
+                    label: "Uploader des images",
+                    onClick: () => setUploadDialogOpen(true),
+                  }
+                : undefined
+            }
+          />
         </Card>
       )}
 
-      {/* Image viewer dialog */}
-      <ImageViewerDialog
-        image={selectedImage}
-        transformationLabel={
-          selectedImage
-            ? getTransformationLabel(
-                selectedImage.transformation_type,
-                dbTransformationTypes
-              )
-            : ""
-        }
-        projectName={project.name}
-        onClose={() => setSelectedImage(null)}
-        onDownload={downloadImage}
-      />
+      {/* Image Viewer Dialog */}
+      {selectedImage && (
+        <ImageViewerDialog
+          image={selectedImage}
+          transformationLabel={getTransformationLabel(selectedImage.transformationType)}
+          projectName={project.name}
+          onClose={() => setSelectedImage(null)}
+          onDownload={downloadImage}
+        />
+      )}
 
-      {/* Delete confirmation dialog */}
+      {/* Delete Image Confirmation */}
       <DeleteConfirmDialog
-        image={
-          deleteConfirmId
-            ? images.find((img) => img.id === deleteConfirmId) || null
-            : null
-        }
+        image={images.find((img) => img.id === deleteConfirmId) || null}
         transformationLabel={
           deleteConfirmId
             ? getTransformationLabel(
                 images.find((img) => img.id === deleteConfirmId)
-                  ?.transformation_type || "",
-                dbTransformationTypes
+                  ?.transformationType || ""
               )
             : ""
         }
         isDeleting={deleteImageMutation.isPending}
-        onConfirm={() => deleteImage(deleteConfirmId!)}
+        onConfirm={() => deleteConfirmId && deleteImage(deleteConfirmId)}
         onCancel={() => setDeleteConfirmId(null)}
+      />
+
+      {/* Delete Project Dialog */}
+      <DeleteProjectDialog
+        open={deleteProjectDialogOpen}
+        onOpenChange={setDeleteProjectDialogOpen}
+        onConfirm={handleDeleteProject}
+        isDeleting={deleteProjectMutation.isPending}
+        projectName={project.name}
       />
 
       {/* Share Dialog */}
       <ShareDialog
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
-        title={project?.name || "Projet"}
-        shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/shared/project/${projectId}` : ''}
-        isPublic={false}
-        onTogglePublic={undefined}
-      />
-
-      {/* Delete Project Dialog */}
-      <DeleteProjectDialog
-        open={deleteProjectDialogOpen}
-        projectName={project.name}
-        totalImages={images.length}
-        isDeleting={deleteProjectMutation.isPending}
-        onConfirm={handleDeleteProject}
-        onCancel={() => setDeleteProjectDialogOpen(false)}
+        shareUrl={typeof window !== 'undefined' ? window.location.href : ''}
+        title={project.name}
       />
     </div>
   );

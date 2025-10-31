@@ -1,138 +1,189 @@
-/**
- * Projects Store - Zustand
- * Gère les projets de l'utilisateur
- */
+import { create } from 'zustand';
+import { createClient } from '@/lib/supabase/client';
+import { logger } from '@/lib/logger';
 
-import { create } from 'zustand'
-import { createClient } from '@/lib/supabase/client'
-import { toast } from 'sonner'
-
-export interface Project {
-  id: string
-  user_id: string
-  name: string
-  address?: string
-  description?: string
-  cover_image_url?: string
-  total_images?: number
-  completed_images?: number
-  created_at: string
-  updated_at: string
+interface Project {
+  id: string;
+  name: string;
+  address?: string;
+  description?: string;
+  coverImageUrl?: string;
+  userId: string;
+  totalImages: number;
+  completedImages: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-interface ProjectsState {
-  // État
-  projects: Project[]
-  isLoading: boolean
-  error: string | null
+interface ProjectsStore {
+  projects: Project[];
+  isLoading: boolean;
+  error: string | null;
 
   // Actions
-  fetchProjects: () => Promise<void>
-  addProject: (project: Project) => void
-  updateProject: (id: string, updates: Partial<Project>) => void
-  deleteProject: (id: string) => Promise<void>
-  getProjectById: (id: string) => Project | undefined
-  reset: () => void
+  fetchProjects: (userId: string) => Promise<void>;
+  createProject: (data: { name: string; description?: string; userId: string }) => Promise<Project | null>;
+  updateProject: (id: string, data: Partial<Project>) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
+  clearProjects: () => void;
 }
 
-/**
- * Store pour gérer les projets
- */
-export const useProjectsStore = create<ProjectsState>()((set, get) => ({
-  // État initial
+export const useProjectsStore = create<ProjectsStore>((set, get) => ({
   projects: [],
   isLoading: false,
   error: null,
 
-  // Récupérer tous les projets depuis Supabase
-  fetchProjects: async () => {
-    set({ isLoading: true, error: null })
+  fetchProjects: async (userId: string) => {
+    set({ isLoading: true, error: null });
 
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
+      const supabase = createClient();
+
+      // Récupérer les projets
+      const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select('*')
-        .order('created_at', { ascending: false })
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-      if (error) throw error
+      if (projectsError) throw projectsError;
 
-      set({ projects: data || [], isLoading: false })
+      // Pour chaque projet, compter les images
+      const projectsWithCounts = await Promise.all(
+        projectsData.map(async (p) => {
+          const { count: totalCount } = await supabase
+            .from('images')
+            .select('*', { count: 'exact', head: true })
+            .eq('project_id', p.id);
+
+          const { count: completedCount } = await supabase
+            .from('images')
+            .select('*', { count: 'exact', head: true })
+            .eq('project_id', p.id)
+            .eq('status', 'completed');
+
+          return {
+            id: p.id,
+            name: p.name,
+            address: p.address,
+            description: p.description,
+            coverImageUrl: p.cover_image_url,
+            userId: p.user_id,
+            totalImages: totalCount || 0,
+            completedImages: completedCount || 0,
+            createdAt: new Date(p.created_at),
+            updatedAt: new Date(p.updated_at),
+          };
+        })
+      );
+
+      set({
+        projects: projectsWithCounts,
+        isLoading: false,
+      });
     } catch (error: any) {
-      set({ error: error.message, isLoading: false })
-      toast.error('Erreur lors du chargement des projets')
+      logger.error('[ProjectsStore] Error fetching projects:', error);
+      set({ error: error.message, isLoading: false });
     }
   },
 
-  // Ajouter un projet localement (après création)
-  addProject: (project) => {
-    set((state) => ({
-      projects: [project, ...state.projects],
-    }))
-  },
+  createProject: async (data) => {
+    set({ isLoading: true, error: null });
 
-  // Mettre à jour un projet localement
-  updateProject: (id, updates) => {
-    set((state) => ({
-      projects: state.projects.map((project) =>
-        project.id === id
-          ? { ...project, ...updates, updated_at: new Date().toISOString() }
-          : project
-      ),
-    }))
-  },
-
-  // Supprimer un projet
-  deleteProject: async (id) => {
     try {
-      const supabase = createClient()
+      const supabase = createClient();
+      const { data: project, error } = await supabase
+        .from('projects')
+        .insert({
+          name: data.name,
+          description: data.description || null,
+          user_id: data.userId,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newProject: Project = {
+        id: project.id,
+        name: project.name,
+        address: project.address,
+        description: project.description,
+        coverImageUrl: project.cover_image_url,
+        userId: project.user_id,
+        totalImages: 0,
+        completedImages: 0,
+        createdAt: new Date(project.created_at),
+        updatedAt: new Date(project.updated_at),
+      };
+
+      set({
+        projects: [newProject, ...get().projects],
+        isLoading: false,
+      });
+
+      return newProject;
+    } catch (error: any) {
+      logger.error('[ProjectsStore] Error creating project:', error);
+      set({ error: error.message, isLoading: false });
+      return null;
+    }
+  },
+
+  updateProject: async (id, data) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const supabase = createClient();
+      const updateData: any = {};
+
+      if (data.name) updateData.name = data.name;
+      if (data.address !== undefined) updateData.address = data.address;
+      if (data.description !== undefined) updateData.description = data.description;
+      if (data.coverImageUrl !== undefined) updateData.cover_image_url = data.coverImageUrl;
+
+      const { error } = await supabase
+        .from('projects')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      set({
+        projects: get().projects.map(p =>
+          p.id === id ? { ...p, ...data, updatedAt: new Date() } : p
+        ),
+        isLoading: false,
+      });
+    } catch (error: any) {
+      logger.error('[ProjectsStore] Error updating project:', error);
+      set({ error: error.message, isLoading: false });
+    }
+  },
+
+  deleteProject: async (id) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const supabase = createClient();
       const { error } = await supabase
         .from('projects')
         .delete()
-        .eq('id', id)
+        .eq('id', id);
 
-      if (error) throw error
+      if (error) throw error;
 
-      set((state) => ({
-        projects: state.projects.filter((project) => project.id !== id),
-      }))
-
-      toast.success('Projet supprimé')
+      set({
+        projects: get().projects.filter(p => p.id !== id),
+        isLoading: false,
+      });
     } catch (error: any) {
-      toast.error('Erreur lors de la suppression')
-      throw error
+      logger.error('[ProjectsStore] Error deleting project:', error);
+      set({ error: error.message, isLoading: false });
     }
   },
 
-  // Récupérer un projet par ID
-  getProjectById: (id) => {
-    return get().projects.find((project) => project.id === id)
+  clearProjects: () => {
+    set({ projects: [], isLoading: false, error: null });
   },
-
-  // Réinitialiser le store
-  reset: () => {
-    set({ projects: [], isLoading: false, error: null })
-  },
-}))
-
-/**
- * Sélecteurs utiles
- */
-export const useProjects = () => useProjectsStore((state) => ({
-  projects: state.projects,
-  isLoading: state.isLoading,
-  error: state.error,
-}))
-
-export const useProjectById = (id: string | null) => {
-  return useProjectsStore((state) =>
-    id ? state.getProjectById(id) : null
-  )
-}
-
-export const useProjectsActions = () => useProjectsStore((state) => ({
-  addProject: state.addProject,
-  updateProject: state.updateProject,
-  deleteProject: state.deleteProject,
-  fetchProjects: state.fetchProjects,
-}))
+}));

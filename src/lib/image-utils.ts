@@ -42,7 +42,7 @@ export interface CompressedImage {
  *   quality: 0.85,
  *   format: 'jpeg'
  * });
- * console.log(`Taille réduite de ${compressed.compressionRatio}%`);
+ * logger.debug(`Taille réduite de ${compressed.compressionRatio}%`);
  * ```
  */
 export async function compressImage(
@@ -266,7 +266,7 @@ export async function compressImages(
       }
       return result;
     } catch (error) {
-      console.error(`Failed to compress ${file.name}:`, error);
+      logger.error(`Failed to compress ${file.name}:`, error);
       completed++;
       if (onProgress) {
         onProgress(Math.round((completed / files.length) * 100));

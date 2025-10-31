@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { LogOut, AlertTriangle } from "lucide-react";
-import { toast } from "sonner";
-import { signOut } from "@/lib/auth/actions";
+import { useSignOut } from "@/domain/auth";
+import { logger } from '@/lib/logger';
 
 interface LogoutModalProps {
   isOpen: boolean;
@@ -20,26 +19,15 @@ interface LogoutModalProps {
 }
 
 export function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const signOutMutation = useSignOut();
 
   const handleLogout = async () => {
-    setIsLoggingOut(true);
-
     try {
-      const result = await signOut();
-
-      if (result && !result.success) {
-        toast.error("Erreur", {
-          description: result.error || "Impossible de se déconnecter",
-        });
-        setIsLoggingOut(false);
-      }
-      // Si succès, signOut() redirige automatiquement vers /auth/login
+      await signOutMutation.mutateAsync();
+      // Le hook gère automatiquement la redirection et les messages
     } catch (error) {
-      toast.error("Erreur", {
-        description: "Une erreur est survenue lors de la déconnexion",
-      });
-      setIsLoggingOut(false);
+      // Les erreurs sont déjà gérées par le hook
+      logger.error('Logout error:', error);
     }
   };
 
@@ -63,7 +51,7 @@ export function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
           <Button
             variant="outline"
             onClick={onClose}
-            disabled={isLoggingOut}
+            disabled={signOutMutation.isPending}
             className="w-full sm:w-auto"
           >
             Annuler
@@ -71,10 +59,10 @@ export function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
           <Button
             variant="destructive"
             onClick={handleLogout}
-            disabled={isLoggingOut}
+            disabled={signOutMutation.isPending}
             className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
           >
-            {isLoggingOut ? (
+            {signOutMutation.isPending ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                 Déconnexion...

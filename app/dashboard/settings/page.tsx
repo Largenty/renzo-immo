@@ -1,26 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { User, Bell, CreditCard, Shield, Save } from "lucide-react";
+import { User, CreditCard, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { useAuthStore } from "@/lib/stores";
 import { SettingsTabs } from "@/components/dashboard/molecules/settings-tabs";
 import {
   ProfileSettingsSection,
   type ProfileFormData,
 } from "@/components/dashboard/organisms/profile-settings-section";
 import { AccountSettingsSection } from "@/components/dashboard/organisms/account-settings-section";
-import { NotificationSettingsSection } from "@/components/dashboard/organisms/notification-settings-section";
 import { BillingSettingsSection } from "@/components/dashboard/organisms/billing-settings-section";
 
 export default function SettingsPage() {
+  const { user, updateUser, isLoading } = useAuthStore();
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
 
   const tabs = [
     { id: "profile", label: "Profil", icon: User },
     { id: "account", label: "Compte", icon: Shield },
-    { id: "notifications", label: "Notifications", icon: Bell },
     { id: "billing", label: "Facturation", icon: CreditCard },
   ];
 
@@ -32,22 +31,120 @@ export default function SettingsPage() {
     toast.success("Paramètres enregistrés avec succès");
   };
 
-  const handleProfileSave = (data: ProfileFormData) => {
-    console.log("Profile data:", data);
-    handleSave();
+  const handleProfileSave = async (data: ProfileFormData) => {
+    setIsSaving(true);
+    try {
+      await updateUser({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone,
+        company: data.company,
+        address: data.address,
+      });
+      toast.success("Profil mis à jour avec succès");
+    } catch (error) {
+      toast.error("Erreur lors de la mise à jour du profil");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handlePasswordChange = (data: {
+  const handleEmailChange = async (newEmail: string) => {
+    setIsSaving(true);
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+
+      const { error } = await supabase.auth.updateUser({
+        email: newEmail,
+      });
+
+      if (error) throw error;
+
+      toast.success("Email de confirmation envoyé", {
+        description: "Vérifiez votre nouvelle adresse email pour confirmer le changement",
+      });
+    } catch (error: any) {
+      toast.error("Erreur lors du changement d'email", {
+        description: error.message,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async (data: {
     currentPassword: string;
     newPassword: string;
     confirmPassword: string;
   }) => {
-    console.log("Password change:", data);
-    toast.success("Mot de passe modifié avec succès");
-  };
+    // Validation - mots de passe correspondent
+    if (data.newPassword !== data.confirmPassword) {
+      toast.error("Erreur", {
+        description: "Les mots de passe ne correspondent pas",
+      });
+      return;
+    }
 
-  const handleEnable2FA = () => {
-    toast.info("Fonctionnalité 2FA à venir");
+    // Validation - longueur minimale (12 caractères comme signup)
+    if (data.newPassword.length < 12) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins 12 caractères",
+      });
+      return;
+    }
+
+    // Validation - au moins une minuscule
+    if (!/[a-z]/.test(data.newPassword)) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins une minuscule",
+      });
+      return;
+    }
+
+    // Validation - au moins une majuscule
+    if (!/[A-Z]/.test(data.newPassword)) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins une majuscule",
+      });
+      return;
+    }
+
+    // Validation - au moins un chiffre
+    if (!/[0-9]/.test(data.newPassword)) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins un chiffre",
+      });
+      return;
+    }
+
+    // Validation - au moins un caractère spécial
+    if (!/[^a-zA-Z0-9]/.test(data.newPassword)) {
+      toast.error("Erreur", {
+        description: "Le mot de passe doit contenir au moins un caractère spécial (!@#$%^&*...)",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+
+      const { error } = await supabase.auth.updateUser({
+        password: data.newPassword,
+      });
+
+      if (error) throw error;
+
+      toast.success("Mot de passe modifié avec succès");
+    } catch (error: any) {
+      toast.error("Erreur lors du changement de mot de passe", {
+        description: error.message,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -93,69 +190,39 @@ export default function SettingsPage() {
 
       {/* Profile Tab */}
       {activeTab === "profile" && (
-        <div className="space-y-6">
-          <ProfileSettingsSection
-            initialData={{
-              firstName: "Jean",
-              lastName: "Dupont",
-              email: "jean.dupont@example.com",
-              phone: "+33 6 12 34 56 78",
-              company: "Dupont Immobilier",
-              address: "45 Avenue des Champs-Élysées, 75008 Paris",
-            }}
-            onSave={handleProfileSave}
-          />
-
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-            >
-              {isSaving ? (
-                "Enregistrement..."
-              ) : (
-                <>
-                  <Save size={18} className="mr-2" />
-                  Enregistrer les modifications
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
+        <>
+          {user ? (
+            <ProfileSettingsSection
+              initialData={{
+                firstName: user.firstName || "",
+                lastName: user.lastName || "",
+                email: user.email || "",
+                phone: user.phone || "",
+                company: user.company || "",
+                address: user.address || "",
+              }}
+              onSave={handleProfileSave}
+              isSaving={isSaving}
+            />
+          ) : (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-sm text-slate-600">Chargement...</p>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Account Tab */}
       {activeTab === "account" && (
         <AccountSettingsSection
+          currentEmail={user?.email}
+          onChangeEmail={handleEmailChange}
           onChangePassword={handlePasswordChange}
-          onEnable2FA={handleEnable2FA}
           onDeleteAccount={handleDeleteAccount}
         />
-      )}
-
-      {/* Notifications Tab */}
-      {activeTab === "notifications" && (
-        <div className="space-y-6">
-          <NotificationSettingsSection onSave={() => handleSave()} />
-
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-            >
-              {isSaving ? (
-                "Enregistrement..."
-              ) : (
-                <>
-                  <Save size={18} className="mr-2" />
-                  Enregistrer les préférences
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
       )}
 
       {/* Billing Tab */}
