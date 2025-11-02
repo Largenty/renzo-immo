@@ -32,9 +32,11 @@ export interface Image {
   status: ImageStatus
   customPrompt?: string
   withFurniture?: boolean
-  furnitureIds?: string[]
   roomType?: RoomType
   customRoom?: string
+  roomWidth?: number  // Largeur de la pièce en mètres
+  roomLength?: number // Longueur de la pièce en mètres
+  roomArea?: number   // Surface en m²
   errorMessage?: string
   metadata?: Record<string, any>
   processingStartedAt?: Date
@@ -80,7 +82,6 @@ export const imageSchema = z.object({
   status: imageStatusSchema,
   customPrompt: z.string().max(5000).optional(),
   withFurniture: z.boolean().optional(),
-  furnitureIds: z.array(z.string().uuid()).optional(),
   roomType: roomTypeSchema.optional(),
   customRoom: z.string().max(200).optional(),
   errorMessage: z.string().optional(),
@@ -105,6 +106,9 @@ export const uploadImageInputSchema = z.object({
   furnitureIds: z.array(z.string().uuid()).optional(),
   roomType: roomTypeSchema.optional(),
   customRoom: z.string().max(200).optional(),
+  roomWidth: z.number().positive().max(100).optional(),   // 📏 Largeur en mètres (max 100m)
+  roomLength: z.number().positive().max(100).optional(),  // 📏 Longueur en mètres (max 100m)
+  roomArea: z.number().positive().max(10000).optional(),  // 📏 Surface en m² (max 10000m²)
 })
 
 export const updateImageInputSchema = z.object({

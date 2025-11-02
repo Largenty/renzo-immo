@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { gsap } from "@/lib/gsap-utils";
 import { Menu, X, User, LogOut } from "lucide-react";
 import { useCurrentUser } from "@/domain/auth";
+import { useAuthStore } from "@/lib/stores";
 import { LogoutModal } from "@/components/modals/logout-modal";
 import {
   DropdownMenu,
@@ -22,8 +23,14 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // ✅ Use both sources: React Query (authoritative) + Zustand (cached, instant)
   const { data: user, isLoading } = useCurrentUser();
-  const isAuthenticated = !!user && !isLoading;
+  const { user: cachedUser } = useAuthStore();
+
+  // ✅ Use cached user for instant display, fallback to React Query
+  const displayUser = user || cachedUser;
+  const isAuthenticated = !!displayUser && !isLoading;
 
   useEffect(() => {
     setMounted(true);
@@ -99,16 +106,16 @@ export function Navbar() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-2">
                     <User size={16} />
-                    {user?.firstName || "Mon compte"}
+                    {displayUser?.firstName || "Mon compte"}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div className="flex flex-col">
                       <span className="font-semibold">
-                        {user?.firstName} {user?.lastName}
+                        {displayUser?.firstName} {displayUser?.lastName}
                       </span>
-                      <span className="text-xs text-gray-500">{user?.email}</span>
+                      <span className="text-xs text-gray-500">{displayUser?.email}</span>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
@@ -119,7 +126,7 @@ export function Navbar() {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/dashboard/credits" className="cursor-pointer">
-                      Crédits ({user?.creditsBalance || 0})
+                      Crédits ({displayUser?.creditsRemaining || 0})
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

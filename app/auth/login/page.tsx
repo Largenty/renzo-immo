@@ -1,42 +1,62 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useCallback, Suspense } from "react";
 import { toast } from "sonner";
 import { useSignIn } from "@/domain/auth";
-import { AuthCard, LoginForm } from "@/components/auth";
+import { AuthCard, LoginForm, AuthLoading } from "@/components/auth";
 import Link from "next/link";
-import { Suspense } from "react";
+import { isValidRedirectPath } from "@/lib/api/helpers";
+import { AUTH_ERROR_MESSAGES } from "@/lib/constants/auth-errors";
+import { useGoogleAuth } from "@/hooks/use-google-auth";
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/dashboard";
+  const rawRedirectTo = searchParams.get("redirectTo") || "/dashboard";
+  const errorParam = searchParams.get("error");
   const signInMutation = useSignIn();
 
-  const handleSubmit = async (data: { email: string; password: string }) => {
+  // ✅ SECURITY: Valider le chemin de redirection
+  const redirectTo = isValidRedirectPath(rawRedirectTo)
+    ? rawRedirectTo
+    : "/dashboard";
+
+  // ✅ OPTIMIZATION: Use custom hook for Google auth
+  const { signInWithGoogle } = useGoogleAuth();
+
+  // ✅ Gestion des erreurs du callback OAuth
+  useEffect(() => {
+    if (errorParam) {
+      const message =
+        AUTH_ERROR_MESSAGES[errorParam as keyof typeof AUTH_ERROR_MESSAGES] ||
+        "Une erreur est survenue lors de la connexion.";
+      toast.error("Erreur de connexion", { description: message });
+    }
+  }, [errorParam]);
+
+  const handleSubmit = useCallback(async (data: { email: string; password: string }) => {
     try {
       const result = await signInMutation.mutateAsync(data);
 
       if (result.success) {
-        toast.success("Connexion réussie !", {
-          description: "Bienvenue sur Renzo",
-        });
+        toast.success("Connexion réussie !");
+        // Redirection SPA avec refresh des Server Components
         router.push(redirectTo);
+        router.refresh();
       } else {
         toast.error("Erreur de connexion", {
           description: result.error || "Email ou mot de passe incorrect",
         });
       }
-    } catch {
+    } catch (error) {
+      console.error("Login error:", error);
       toast.error("Erreur", {
         description: "Une erreur est survenue lors de la connexion",
       });
     }
-  };
+  }, [signInMutation, router, redirectTo]);
 
-  const handleGoogleSignIn = async () => {
-    toast.info("Fonctionnalité Google OAuth à implémenter");
-  };
 
   return (
     <AuthCard
@@ -45,17 +65,16 @@ function LoginContent() {
     >
       <LoginForm
         onSubmit={handleSubmit}
-        onGoogleSignIn={handleGoogleSignIn}
+        onGoogleSignIn={signInWithGoogle}
         isLoading={signInMutation.isPending}
       />
 
-      {/* Back to home */}
-      <div className="text-center mt-6">
+      <div className="mt-6 text-center">
         <Link
           href="/"
-          className="text-sm text-slate-500 hover:text-slate-700 font-medium inline-flex items-center gap-1"
+          className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
         >
-          ← Retour à l&apos;accueil
+          ← Retour à l'accueil
         </Link>
       </div>
     </AuthCard>
@@ -64,16 +83,14 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <AuthCard
-        title="Bon retour !"
-        subtitle="Connectez-vous à votre compte pour continuer"
-      >
-        <div className="flex items-center justify-center py-8">
-          <div className="text-slate-500">Chargement...</div>
-        </div>
-      </AuthCard>
-    }>
+    <Suspense
+      fallback={
+        <AuthLoading
+          title="Bon retour !"
+          subtitle="Connectez-vous à votre compte pour continuer"
+        />
+      }
+    >
       <LoginContent />
     </Suspense>
   );

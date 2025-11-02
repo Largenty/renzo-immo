@@ -1,15 +1,24 @@
+/**
+ * Auth Store Provider - Version simplifiée
+ * Initialise le store d'authentification une seule fois au démarrage
+ */
+
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/lib/stores/auth-store';
 
 export function AuthStoreProvider({ children }: { children: React.ReactNode }) {
-  const checkAuth = useAuthStore((state) => state.checkAuth);
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
-    // Initialiser le store une seule fois au démarrage de l'app
-    checkAuth();
-  }, [checkAuth]);
+    // S'assurer qu'on initialise une seule fois
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      console.log('[AuthStoreProvider] Initializing auth...');
+      useAuthStore.getState().initAuth();
+    }
+  }, []);
 
   return <>{children}</>;
 }

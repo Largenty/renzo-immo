@@ -14,8 +14,13 @@ import {
   ChevronUp,
   ImageIcon,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { fr } from "date-fns/locale";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import "dayjs/locale/fr";
+
+// Configure dayjs
+dayjs.extend(relativeTime);
+dayjs.locale("fr");
 
 interface ImageHistoryItem {
   id: string;
@@ -157,10 +162,7 @@ export function ImageHistory({
                     <div className="flex items-center gap-2 mt-1">
                       <Clock size={12} className="text-slate-400" />
                       <p className="text-xs text-slate-500">
-                        {formatDistanceToNow(new Date(image.createdAt), {
-                          addSuffix: true,
-                          locale: fr,
-                        })}
+                        {dayjs(image.createdAt).fromNow()}
                       </p>
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionMenu, type ActionMenuItem, AVAILABLE_ICONS } from "../atoms";
@@ -14,7 +15,7 @@ interface StyleCardProps {
   onDelete: () => void;
 }
 
-export function StyleCard({
+export const StyleCard = memo(function StyleCard({
   name,
   description,
   iconName = "Sparkles",
@@ -59,4 +60,4 @@ export function StyleCard({
       )}
     </Card>
   );
-}
+});

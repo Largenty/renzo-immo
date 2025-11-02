@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { createClient } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 
@@ -19,76 +21,90 @@ interface ProjectsStore {
   projects: Project[];
   isLoading: boolean;
   error: string | null;
+  lastFetch: number | null;
 
   // Actions
-  fetchProjects: (userId: string) => Promise<void>;
+  fetchProjects: (userId: string, force?: boolean) => Promise<void>;
   createProject: (data: { name: string; description?: string; userId: string }) => Promise<Project | null>;
   updateProject: (id: string, data: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   clearProjects: () => void;
 }
 
-export const useProjectsStore = create<ProjectsStore>((set, get) => ({
-  projects: [],
-  isLoading: false,
-  error: null,
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-  fetchProjects: async (userId: string) => {
-    set({ isLoading: true, error: null });
+export const useProjectsStore = create<ProjectsStore>()(
+  persist(
+    immer((set, get) => ({
+      projects: [],
+      isLoading: false,
+      error: null,
+      lastFetch: null,
+
+  fetchProjects: async (userId: string, force = false) => {
+    const now = Date.now();
+    const { lastFetch, projects } = get();
+
+    // ✅ Cache TTL: ne re-fetch que si > 5 minutes ou force
+    if (!force && lastFetch && projects.length > 0 && now - lastFetch < CACHE_TTL) {
+      logger.debug('[ProjectsStore] Using cached data, skipping fetch');
+      return;
+    }
+
+    set((state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
 
     try {
       const supabase = createClient();
 
-      // Récupérer les projets
+      // ✅ UNE SEULE QUERY - Utilise les colonnes dénormalisées (total_images, completed_images)
+      // Ces colonnes sont automatiquement maintenues par des triggers DB
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
-        .select('*')
+        .select('id, name, address, description, cover_image_url, user_id, total_images, completed_images, created_at, updated_at, status')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .eq('status', 'active')
+        .order('updated_at', { ascending: false });
 
       if (projectsError) throw projectsError;
 
-      // Pour chaque projet, compter les images
-      const projectsWithCounts = await Promise.all(
-        projectsData.map(async (p) => {
-          const { count: totalCount } = await supabase
-            .from('images')
-            .select('*', { count: 'exact', head: true })
-            .eq('project_id', p.id);
+      // Mapper directement les données dénormalisées (pas besoin de compter!)
+      const fetchedProjects = projectsData.map(p => ({
+        id: p.id,
+        name: p.name,
+        address: p.address,
+        description: p.description,
+        coverImageUrl: p.cover_image_url,
+        userId: p.user_id,
+        totalImages: p.total_images || 0,        // ✅ Déjà calculé par trigger!
+        completedImages: p.completed_images || 0, // ✅ Déjà calculé par trigger!
+        createdAt: new Date(p.created_at),
+        updatedAt: new Date(p.updated_at),
+      }));
 
-          const { count: completedCount } = await supabase
-            .from('images')
-            .select('*', { count: 'exact', head: true })
-            .eq('project_id', p.id)
-            .eq('status', 'completed');
-
-          return {
-            id: p.id,
-            name: p.name,
-            address: p.address,
-            description: p.description,
-            coverImageUrl: p.cover_image_url,
-            userId: p.user_id,
-            totalImages: totalCount || 0,
-            completedImages: completedCount || 0,
-            createdAt: new Date(p.created_at),
-            updatedAt: new Date(p.updated_at),
-          };
-        })
-      );
-
-      set({
-        projects: projectsWithCounts,
-        isLoading: false,
+      set((state) => {
+        state.projects = fetchedProjects;
+        state.isLoading = false;
+        state.lastFetch = now;
       });
+
+      logger.debug(`[ProjectsStore] Fetched ${fetchedProjects.length} projects (1 query, was N+1)`);
     } catch (error: any) {
       logger.error('[ProjectsStore] Error fetching projects:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
     }
   },
 
   createProject: async (data) => {
-    set({ isLoading: true, error: null });
+    set((state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
 
     try {
       const supabase = createClient();
@@ -117,21 +133,28 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
         updatedAt: new Date(project.updated_at),
       };
 
-      set({
-        projects: [newProject, ...get().projects],
-        isLoading: false,
+      // ✅ Immer: mutation directe, plus simple
+      set((state) => {
+        state.projects.unshift(newProject);
+        state.isLoading = false;
       });
 
       return newProject;
     } catch (error: any) {
       logger.error('[ProjectsStore] Error creating project:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
       return null;
     }
   },
 
   updateProject: async (id, data) => {
-    set({ isLoading: true, error: null });
+    set((state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
 
     try {
       const supabase = createClient();
@@ -149,20 +172,29 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
 
       if (error) throw error;
 
-      set({
-        projects: get().projects.map(p =>
-          p.id === id ? { ...p, ...data, updatedAt: new Date() } : p
-        ),
-        isLoading: false,
+      // ✅ Immer: mutation directe du projet trouvé
+      set((state) => {
+        const project = state.projects.find(p => p.id === id);
+        if (project) {
+          Object.assign(project, data);
+          project.updatedAt = new Date();
+        }
+        state.isLoading = false;
       });
     } catch (error: any) {
       logger.error('[ProjectsStore] Error updating project:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
     }
   },
 
   deleteProject: async (id) => {
-    set({ isLoading: true, error: null });
+    set((state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
 
     try {
       const supabase = createClient();
@@ -173,17 +205,36 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
 
       if (error) throw error;
 
-      set({
-        projects: get().projects.filter(p => p.id !== id),
-        isLoading: false,
+      // ✅ Immer: filter plus simple
+      set((state) => {
+        state.projects = state.projects.filter(p => p.id !== id);
+        state.isLoading = false;
       });
     } catch (error: any) {
       logger.error('[ProjectsStore] Error deleting project:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
     }
   },
 
   clearProjects: () => {
-    set({ projects: [], isLoading: false, error: null });
+    set((state) => {
+      state.projects = [];
+      state.isLoading = false;
+      state.error = null;
+      state.lastFetch = null;
+    });
   },
-}));
+    })),
+    {
+      name: 'renzo-projects-storage',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        projects: state.projects,
+        lastFetch: state.lastFetch,
+      }),
+    }
+  )
+);

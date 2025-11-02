@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -15,19 +15,18 @@ import {
   Sparkles,
   User,
   Palette,
-  Sofa,
   Home,
 } from "lucide-react";
 import { LogoutModal } from "@/components/modals/logout-modal";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { useAuthStore, useCreditsStore } from "@/lib/stores";
+import { useCurrentUser } from "@/domain/auth";
+import { useCreditBalance } from "@/domain/credits/hooks/use-credits";
 import { logger } from '@/lib/logger';
 
 const navigation = [
   { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
   { name: "Mes projets", href: "/dashboard/projects", icon: FolderOpen },
   { name: "Mes styles", href: "/dashboard/styles", icon: Palette },
-  { name: "Meubles", href: "/dashboard/furniture", icon: Sofa },
   { name: "Pièces", href: "/dashboard/rooms", icon: Home },
   { name: "Paramètres", href: "/dashboard/settings", icon: Settings },
   { name: "Crédits", href: "/dashboard/credits", icon: CreditCard },
@@ -43,45 +42,13 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
 
-  // UNIQUEMENT Zustand stores
-  const { user, isLoading } = useAuthStore();
-  const { balance: creditsBalance, fetchBalance } = useCreditsStore();
+  // ✅ Hooks domaine React Query (pattern cohérent avec toutes les pages)
+  const { data: user, isLoading: isLoadingUser } = useCurrentUser();
+  const { data: creditsBalance, error: creditsError } = useCreditBalance(user?.id);
 
-  // Charger les crédits quand l'utilisateur est chargé
-  useEffect(() => {
-    if (user?.id) {
-      fetchBalance(user.id);
-    }
-  }, [user?.id, fetchBalance]);
-
-  // ⚠️ IMPORTANT: Ne pas faire de redirection côté client ici
-  // Le middleware s'occupe déjà de protéger les routes /dashboard
-  // Rediriger ici créerait une boucle infinie avec le middleware
-
-  // Afficher loader pendant le chargement initial du store
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-sm text-slate-600">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Si pas encore de user mais que le middleware nous a laissé passer,
-  // afficher le loader (le user va arriver sous peu)
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-sm text-slate-600">Chargement du profil...</p>
-        </div>
-      </div>
-    );
-  }
+  // ⚠️ IMPORTANT: Ne pas bloquer le rendu ici
+  // Le middleware garantit déjà que l'utilisateur est authentifié
+  // Si le hook n'a pas encore de user, afficher un placeholder
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -98,6 +65,7 @@ export default function DashboardLayout({
         className={`fixed top-0 left-0 h-full w-64 bg-white border-r border-slate-200 z-50 transform transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        aria-label="Navigation principale"
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
@@ -111,6 +79,7 @@ export default function DashboardLayout({
             <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden text-slate-500 hover:text-slate-900"
+              aria-label="Fermer le menu"
             >
               <X size={20} />
             </button>
@@ -153,10 +122,9 @@ export default function DashboardLayout({
               )}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-slate-900 truncate">
-                  {user?.firstName} {user?.lastName}
+                  {user?.firstName || ""} {user?.lastName || ""}
                 </div>
                 <div className="text-xs text-slate-500">
-                  {/* @ts-ignore - TODO: Fix User type to include subscriptionPlanId */}
                   {user?.subscriptionPlanId ? "Pro Plan" : "Free Plan"}
                 </div>
               </div>
@@ -180,6 +148,8 @@ export default function DashboardLayout({
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-slate-700 hover:text-slate-900"
+            aria-label="Ouvrir le menu"
+            aria-expanded={sidebarOpen}
           >
             <Menu size={24} />
           </button>
@@ -190,7 +160,7 @@ export default function DashboardLayout({
               <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 hover:from-blue-100 hover:to-indigo-100 transition-colors cursor-pointer">
                 <Sparkles size={16} className="text-blue-600" />
                 <span className="text-sm font-semibold text-slate-900">
-                  {creditsBalance} crédit{creditsBalance > 1 ? 's' : ''}
+                  {creditsError ? "—" : (creditsBalance ?? 0)} crédit{(creditsBalance ?? 0) !== 1 ? 's' : ''}
                 </span>
               </div>
             </Link>

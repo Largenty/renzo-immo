@@ -21,9 +21,11 @@ interface ImageRow {
   status: ImageStatus
   custom_prompt: string | null
   with_furniture: boolean | null
-  furniture_ids?: string[] | null // ✅ AJOUTÉ: IDs des meubles sélectionnés
   room_type: string | null
   custom_room: string | null
+  room_width: number | null   // 📏 Largeur de la pièce en mètres
+  room_length: number | null  // 📏 Longueur de la pièce en mètres
+  room_area: number | null    // 📏 Surface de la pièce en m²
   metadata: any | null // ✅ AJOUTÉ: Colonne metadata pour le taskId
   processing_started_at: string | null
   processing_completed_at: string | null
@@ -48,9 +50,11 @@ function mapRowToDomain(row: ImageRow): Image {
     status: row.status,
     customPrompt: row.custom_prompt || undefined,
     withFurniture: row.with_furniture || undefined,
-    furnitureIds: row.furniture_ids || undefined, // ✅ AJOUTÉ: mapper furniture_ids
     roomType: row.room_type as any,
     customRoom: row.custom_room || undefined,
+    roomWidth: row.room_width || undefined,   // 📏 Dimensions de la pièce
+    roomLength: row.room_length || undefined, // 📏 Dimensions de la pièce
+    roomArea: row.room_area || undefined,     // 📏 Dimensions de la pièce
     metadata: row.metadata || undefined, // ✅ AJOUTÉ: Mapper la colonne metadata
     processingStartedAt: row.processing_started_at ? new Date(row.processing_started_at) : undefined,
     processingCompletedAt: row.processing_completed_at
@@ -99,8 +103,28 @@ export class SupabaseImagesRepository implements IImagesRepository {
   }
 
   async createImage(image: Omit<Image, 'id' | 'createdAt' | 'updatedAt'>): Promise<Image> {
-    // 🔄 UTILISER transformation_type (string) temporairement
-    // TODO: Migrer vers transformation_type_id (UUID) une fois le schéma mis à jour
+    // ✅ RÉSOUDRE LE SLUG → UUID
+    // Si transformationType ressemble à un UUID (contient des tirets), l'utiliser tel quel
+    // Sinon, c'est un slug qu'il faut résoudre en UUID
+    let transformationTypeId = image.transformationType;
+
+    if (!transformationTypeId.includes('-')) {
+      // C'est un slug, il faut le résoudre en UUID
+      const { data: transformationType, error: resolveError } = await this.supabase
+        .from('transformation_types')
+        .select('id')
+        .eq('slug', image.transformationType)
+        .single();
+
+      if (resolveError || !transformationType) {
+        throw new Error(
+          `Failed to resolve transformation type slug "${image.transformationType}": ${resolveError?.message || 'Not found'}`
+        );
+      }
+
+      transformationTypeId = transformationType.id;
+    }
+
     const { data, error} = await this.supabase
       .from('images')
       .insert({
@@ -108,13 +132,15 @@ export class SupabaseImagesRepository implements IImagesRepository {
         user_id: image.userId,
         original_url: image.originalUrl,
         transformed_url: image.transformedUrl || null,
-        transformation_type: image.transformationType, // 🔄 Utiliser string slug
+        transformation_type_id: transformationTypeId, // ✅ Utiliser UUID résolu
         status: image.status,
         custom_prompt: image.customPrompt || null,
         with_furniture: image.withFurniture || null,
-        furniture_ids: image.furnitureIds || null, // ✅ AJOUTÉ: Array d'UUIDs des meubles
         room_type: image.roomType || null,
         custom_room: image.customRoom || null,
+        room_width: image.roomWidth || null,   // 📏 Dimensions de la pièce
+        room_length: image.roomLength || null, // 📏 Dimensions de la pièce
+        room_area: image.roomArea || null,     // 📏 Dimensions de la pièce
       })
       .select()
       .single()
@@ -132,16 +158,33 @@ export class SupabaseImagesRepository implements IImagesRepository {
     }
 
     if (updates.transformationType !== undefined) {
-      updateData.transformation_type = updates.transformationType // 🔄 Utiliser string slug
+      // ✅ RÉSOUDRE LE SLUG → UUID
+      let transformationTypeId = updates.transformationType;
+
+      if (!transformationTypeId.includes('-')) {
+        // C'est un slug, il faut le résoudre en UUID
+        const { data: transformationType, error: resolveError } = await this.supabase
+          .from('transformation_types')
+          .select('id')
+          .eq('slug', updates.transformationType)
+          .single();
+
+        if (resolveError || !transformationType) {
+          throw new Error(
+            `Failed to resolve transformation type slug "${updates.transformationType}": ${resolveError?.message || 'Not found'}`
+          );
+        }
+
+        transformationTypeId = transformationType.id;
+      }
+
+      updateData.transformation_type_id = transformationTypeId; // ✅ Utiliser UUID résolu
     }
     if (updates.customPrompt !== undefined) {
       updateData.custom_prompt = updates.customPrompt
     }
     if (updates.withFurniture !== undefined) {
       updateData.with_furniture = updates.withFurniture
-    }
-    if (updates.furnitureIds !== undefined) {
-      updateData.furniture_ids = updates.furnitureIds // ✅ AJOUTÉ: Mise à jour des IDs de meubles
     }
     if (updates.roomType !== undefined) {
       updateData.room_type = updates.roomType

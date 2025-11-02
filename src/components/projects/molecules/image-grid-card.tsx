@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Image from "next/image";
 import { Card, Button, StatusBadge, type StatusType } from "@/components/ui";
 import {
@@ -13,6 +14,7 @@ import {
   Clock,
 } from "lucide-react";
 import type { Image as ImageType } from "@/domain/images";
+import { BLUR_PLACEHOLDERS } from "@/lib/image-blur-utils";
 
 /**
  * Props pour le composant ImageGridCard
@@ -33,7 +35,7 @@ interface ImageGridCardProps {
  *
  * Affiche une paire d'images (originale et transformée) avec actions
  */
-export function ImageGridCard({
+export const ImageGridCard = memo(function ImageGridCard({
   image,
   transformationLabel,
   projectName,
@@ -56,6 +58,8 @@ export function ImageGridCard({
             alt="Original"
             fill
             loading="lazy"
+            placeholder="blur"
+            blurDataURL={BLUR_PLACEHOLDERS.imageCard}
             className="object-cover"
             sizes="(max-width: 768px) 50vw, 25vw"
           />
@@ -73,6 +77,8 @@ export function ImageGridCard({
                 alt="Transformé"
                 fill
                 loading="lazy"
+                placeholder="blur"
+                blurDataURL={BLUR_PLACEHOLDERS.imageCard}
                 className="object-cover"
                 sizes="(max-width: 768px) 50vw, 25vw"
               />
@@ -263,4 +269,4 @@ export function ImageGridCard({
       </div>
     </Card>
   );
-}
+});

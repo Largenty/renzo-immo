@@ -18,7 +18,6 @@ import {
   Bath,
   DoorOpen,
   Briefcase,
-  Home,
   ArrowRight,
   MoreHorizontal,
   Loader2,
@@ -32,18 +31,19 @@ import { useCurrentUser } from "@/domain/auth";
 import { compressImage, isValidImageFile, isFileSizeValid, formatFileSize } from "@/lib/image-utils";
 import { toast } from "sonner";
 import { logger } from '@/lib/logger';
-import { FurnitureSelectorDialog } from "@/components/furniture/furniture-selector-dialog";
 
 interface UploadedFile {
   id: string;
   file: File;
   preview: string;
   transformationType?: TransformationType; // Slug (ex: "home_staging_moderne")
-  withFurniture?: boolean;
-  furnitureIds?: string[];
+  withFurniture?: boolean; // Toggle simple: avec ou sans meubles
   customPrompt?: string;
   roomType?: RoomType;
   customRoom?: string;
+  roomWidth?: number;  // 📏 Largeur en mètres
+  roomLength?: number; // 📏 Longueur en mètres
+  roomArea?: number;   // 📏 Surface en m²
 }
 
 interface ImageUploaderProps {
@@ -82,8 +82,6 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
   const [isDragging, setIsDragging] = useState(false);
   const [step, setStep] = useState<"upload" | "configure">("upload");
   const [bulkMode, setBulkMode] = useState(true); // true = même type pour tout, false = individuel
-  const [furnitureDialogOpen, setFurnitureDialogOpen] = useState(false);
-  const [currentFileIdForFurniture, setCurrentFileIdForFurniture] = useState<string | null>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -224,94 +222,6 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
     );
   };
 
-  const toggleFurniture = async (id: string, withFurniture: boolean) => {
-    setFiles((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, withFurniture } : f))
-    );
-
-    // 🎯 AUTO-LOAD: Si "avec meubles" activé, charger le preset par défaut
-    if (withFurniture) {
-      const file = files.find(f => f.id === id);
-      if (file?.transformationType && file?.roomType) {
-        try {
-          logger.debug('[ImageUploader] Auto-loading furniture preset for file:', {
-            fileId: id,
-            transformationType: file.transformationType,
-            roomType: file.roomType,
-          });
-
-          const params = new URLSearchParams({
-            transformationTypeId: file.transformationType, // Utiliser le slug
-            roomType: file.roomType,
-          });
-
-          const response = await fetch(`/api/furniture/preset?${params}`);
-          if (response.ok) {
-            const data = await response.json();
-            const furnitureIds = data.furnitureIds || [];
-
-            logger.debug('[ImageUploader] Preset loaded:', {
-              furnitureCount: furnitureIds.length,
-              furnitureIds,
-            });
-
-            if (furnitureIds.length > 0) {
-              updateFurnitureIds(id, furnitureIds);
-              toast.success('Meubles par défaut ajoutés', {
-                description: `${furnitureIds.length} meubles sélectionnés automatiquement`,
-              });
-            }
-          }
-        } catch (error) {
-          logger.error('[ImageUploader] Error loading furniture preset:', error);
-          // Silent fail - l'utilisateur peut toujours personnaliser manuellement
-        }
-      }
-    }
-  };
-
-  const applyBulkFurniture = async (withFurniture: boolean) => {
-    setFiles((prev) =>
-      prev.map((f) => ({ ...f, withFurniture }))
-    );
-
-    // 🎯 AUTO-LOAD: Si "avec meubles" activé, charger le preset par défaut
-    if (withFurniture && files[0]?.transformationType && files[0]?.roomType) {
-      try {
-        logger.debug('[ImageUploader] Auto-loading furniture preset:', {
-          transformationType: files[0].transformationType,
-          roomType: files[0].roomType,
-        });
-
-        const params = new URLSearchParams({
-          transformationTypeId: files[0].transformationType, // Utiliser le slug
-          roomType: files[0].roomType,
-        });
-
-        const response = await fetch(`/api/furniture/preset?${params}`);
-        if (response.ok) {
-          const data = await response.json();
-          const furnitureIds = data.furnitureIds || [];
-
-          logger.debug('[ImageUploader] Preset loaded:', {
-            furnitureCount: furnitureIds.length,
-            furnitureIds,
-          });
-
-          if (furnitureIds.length > 0) {
-            applyBulkFurnitureIds(furnitureIds);
-            toast.success('Meubles par défaut ajoutés', {
-              description: `${furnitureIds.length} meubles sélectionnés automatiquement`,
-            });
-          }
-        }
-      } catch (error) {
-        logger.error('[ImageUploader] Error loading furniture preset:', error);
-        // Silent fail - l'utilisateur peut toujours personnaliser manuellement
-      }
-    }
-  };
-
   const updateCustomPrompt = (id: string, customPrompt: string) => {
     setFiles((prev) =>
       prev.map((f) => (f.id === id ? { ...f, customPrompt } : f))
@@ -348,68 +258,48 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
     );
   };
 
-  const updateFurnitureIds = (id: string, furnitureIds: string[]) => {
+  // 🪑 Toggle furniture mode (simple boolean)
+  const toggleFurnitureMode = (id: string, withFurniture: boolean) => {
     setFiles((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, furnitureIds } : f))
+      prev.map((f) => (f.id === id ? { ...f, withFurniture } : f))
     );
   };
 
-  const applyBulkFurnitureIds = (furnitureIds: string[]) => {
+  const applyBulkFurniture = (withFurniture: boolean) => {
     setFiles((prev) =>
-      prev.map((f) => ({ ...f, furnitureIds }))
+      prev.map((f) => ({ ...f, withFurniture }))
     );
   };
 
-  const openFurnitureSelector = (fileId: string | null = null) => {
-    // 🐛 DEBUG: Log l'ouverture du dialogue
-    logger.debug('[ImageUploader] Opening furniture selector:', {
-      fileId,
-      mode: fileId ? 'individual' : 'bulk',
-      hasTransformationType: !!files[0]?.transformationType,
-      transformationType: files[0]?.transformationType,
-      hasRoomType: !!files[0]?.roomType,
-      roomType: files[0]?.roomType,
-    });
-
-    setCurrentFileIdForFurniture(fileId);
-    setFurnitureDialogOpen(true);
+  // 📏 Room dimensions functions
+  const updateRoomDimensions = (id: string, dimensions: { roomWidth?: number; roomLength?: number; roomArea?: number }) => {
+    setFiles((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, ...dimensions } : f))
+    );
   };
 
-  const handleFurnitureSelect = (furnitureIds: string[]) => {
-    // 🐛 DEBUG: Log la sélection de meubles
-    logger.debug('[ImageUploader] Furniture selected:', {
-      furnitureCount: furnitureIds.length,
-      furnitureIds,
-      mode: currentFileIdForFurniture ? 'individual' : 'bulk',
-      fileId: currentFileIdForFurniture,
-    });
-
-    if (currentFileIdForFurniture) {
-      // Mode individuel - mettre à jour un seul fichier
-      updateFurnitureIds(currentFileIdForFurniture, furnitureIds);
-    } else {
-      // Mode bulk - mettre à jour tous les fichiers
-      applyBulkFurnitureIds(furnitureIds);
-    }
+  const applyBulkRoomDimensions = (dimensions: { roomWidth?: number; roomLength?: number; roomArea?: number }) => {
+    setFiles((prev) =>
+      prev.map((f) => ({ ...f, ...dimensions }))
+    );
   };
 
   const handleSubmit = () => {
+    const filesToSubmit = files;
+
     // 🐛 DEBUG: Log avant submission finale
     logger.debug('[ImageUploader] Submitting files:', {
-      fileCount: files.length,
-      files: files.map(f => ({
+      fileCount: filesToSubmit.length,
+      files: filesToSubmit.map(f => ({
         id: f.id,
         name: f.file.name,
         transformationType: f.transformationType,
-        withFurniture: f.withFurniture,
-        furnitureIds: f.furnitureIds,
-        furnitureCount: f.furnitureIds?.length || 0,
         roomType: f.roomType,
         customRoom: f.customRoom,
       })),
     });
 
-    onUploadComplete?.(files);
+    onUploadComplete?.(filesToSubmit);
   };
 
   return (
@@ -658,55 +548,6 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
                     </div>
                   )}
 
-                  {/* Furniture Toggle (only if type allows it) */}
-                  {(() => {
-                    const selectedType = transformationTypes.find(t => t.value === files[0]?.transformationType);
-                    if (selectedType?.allowFurnitureToggle) {
-                      return (
-                        <div className="pt-4 border-t border-slate-200">
-                          <Label className="text-sm text-slate-700 font-semibold mb-3 block">
-                            Options de meubles
-                          </Label>
-                          <div className="flex gap-2 mb-3">
-                            <Button
-                              size="sm"
-                              variant={files[0]?.withFurniture === true ? "default" : "outline"}
-                              onClick={() => applyBulkFurniture(true)}
-                              className={files[0]?.withFurniture === true ? "bg-blue-600 hover:bg-blue-700" : ""}
-                            >
-                              Avec meubles
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={files[0]?.withFurniture === false ? "default" : "outline"}
-                              onClick={() => applyBulkFurniture(false)}
-                              className={files[0]?.withFurniture === false ? "bg-blue-600 hover:bg-blue-700" : ""}
-                            >
-                              Sans meubles
-                            </Button>
-                          </div>
-                          {files[0]?.withFurniture === true && files[0]?.roomType && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openFurnitureSelector(null)}
-                              className="w-full gap-2"
-                            >
-                              <Sofa size={16} />
-                              Personnaliser les meubles
-                              {files[0]?.furnitureIds && files[0].furnitureIds.length > 0 && (
-                                <span className="ml-auto text-xs text-blue-600">
-                                  ({files[0].furnitureIds.length} sélectionnés)
-                                </span>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-
                   {/* Custom Prompt (only for style_personnalise) */}
                   {files[0]?.transformationType === "style_personnalise" && (
                     <div className="pt-4 border-t border-slate-200">
@@ -788,6 +629,200 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
                         onChange={(e) => applyBulkCustomRoom(e.target.value)}
                       />
                     </div>
+                  )}
+                </div>
+              </Card>
+
+              {/* Furniture Toggle */}
+              <Card className="modern-card p-6">
+                <div className="space-y-4">
+                  <Label className="text-base text-slate-900 font-bold">
+                    Meubles pour {files.length === 1 ? "cette photo" : "toutes les photos"}
+                  </Label>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => applyBulkFurniture(true)}
+                      className={`relative p-4 rounded-md border-2 text-left transition-all ${
+                        files[0]?.withFurniture === true
+                          ? "border-blue-500 bg-blue-50 shadow-md"
+                          : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0 ${
+                          files[0]?.withFurniture === true ? "bg-blue-500" : "bg-slate-100"
+                        }`}>
+                          <Sofa
+                            size={20}
+                            className={files[0]?.withFurniture === true ? "text-white" : "text-slate-600"}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-900">
+                            Avec meubles
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Automatiques
+                          </p>
+                        </div>
+                        {files[0]?.withFurniture === true && (
+                          <div className="w-5 h-5 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0">
+                            <Check className="text-white" size={14} />
+                          </div>
+                        )}
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => applyBulkFurniture(false)}
+                      className={`relative p-4 rounded-md border-2 text-left transition-all ${
+                        files[0]?.withFurniture === false
+                          ? "border-blue-500 bg-blue-50 shadow-md"
+                          : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0 ${
+                          files[0]?.withFurniture === false ? "bg-blue-500" : "bg-slate-100"
+                        }`}>
+                          <Sparkles
+                            size={20}
+                            className={files[0]?.withFurniture === false ? "text-white" : "text-slate-600"}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-900">
+                            Sans meubles
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Espace vide
+                          </p>
+                        </div>
+                        {files[0]?.withFurniture === false && (
+                          <div className="w-5 h-5 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0">
+                            <Check className="text-white" size={14} />
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Room Dimensions (Optional) */}
+              <Card className="modern-card p-6">
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl">📏</span>
+                    </div>
+                    <div className="flex-1">
+                      <Label className="text-base text-slate-900 font-bold block mb-1">
+                        Dimensions de la pièce (optionnel)
+                      </Label>
+                      <p className="text-sm text-slate-600">
+                        Fournir les dimensions aide l'IA à mieux respecter les proportions réelles
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="roomWidth" className="text-sm text-slate-700 font-semibold mb-2 block">
+                        Largeur (m)
+                      </Label>
+                      <Input
+                        id="roomWidth"
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        max="100"
+                        placeholder="3.5"
+                        value={files[0]?.roomWidth || ""}
+                        onChange={(e) => {
+                          const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                          const width = value;
+                          const length = files[0]?.roomLength;
+                          const area = width && length ? width * length : files[0]?.roomArea;
+                          applyBulkRoomDimensions({ roomWidth: width, roomLength: length, roomArea: area });
+                        }}
+                        className="h-11"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="roomLength" className="text-sm text-slate-700 font-semibold mb-2 block">
+                        Longueur (m)
+                      </Label>
+                      <Input
+                        id="roomLength"
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        max="100"
+                        placeholder="4.2"
+                        value={files[0]?.roomLength || ""}
+                        onChange={(e) => {
+                          const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                          const width = files[0]?.roomWidth;
+                          const length = value;
+                          const area = width && length ? width * length : files[0]?.roomArea;
+                          applyBulkRoomDimensions({ roomWidth: width, roomLength: length, roomArea: area });
+                        }}
+                        className="h-11"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="roomArea" className="text-sm text-slate-700 font-semibold mb-2 block">
+                      Surface (m²)
+                    </Label>
+                    <Input
+                      id="roomArea"
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      max="10000"
+                      placeholder="Calculé automatiquement"
+                      value={
+                        files[0]?.roomArea
+                          ? files[0].roomArea
+                          : (files[0]?.roomWidth && files[0]?.roomLength
+                              ? (files[0].roomWidth * files[0].roomLength).toFixed(1)
+                              : "")
+                      }
+                      onChange={(e) => {
+                        const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                        applyBulkRoomDimensions({
+                          roomWidth: files[0]?.roomWidth,
+                          roomLength: files[0]?.roomLength,
+                          roomArea: value
+                        });
+                      }}
+                      className={`h-11 ${
+                        files[0]?.roomWidth && files[0]?.roomLength && !files[0]?.roomArea
+                          ? "bg-slate-50 text-slate-600"
+                          : ""
+                      }`}
+                    />
+                    {files[0]?.roomWidth && files[0]?.roomLength && !files[0]?.roomArea && (
+                      <p className="text-xs text-slate-500 mt-2">
+                        Calculé: {(files[0].roomWidth * files[0].roomLength).toFixed(1)} m²
+                      </p>
+                    )}
+                  </div>
+
+                  {(files[0]?.roomWidth || files[0]?.roomLength || files[0]?.roomArea) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applyBulkRoomDimensions({ roomWidth: undefined, roomLength: undefined, roomArea: undefined })}
+                      className="text-slate-600"
+                    >
+                      Effacer les dimensions
+                    </Button>
                   )}
                 </div>
               </Card>
@@ -962,55 +997,6 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
                       )}
                     </div>
 
-                    {/* Furniture Toggle (only if type allows it) */}
-                    {(() => {
-                      const selectedType = transformationTypes.find(t => t.value === uploadedFile.transformationType);
-                      if (selectedType?.allowFurnitureToggle) {
-                        return (
-                          <div className="pt-4 border-t border-slate-200 space-y-3">
-                            <Label className="text-sm text-slate-700 font-semibold">
-                              Options de meubles
-                            </Label>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant={uploadedFile.withFurniture === true ? "default" : "outline"}
-                                onClick={() => toggleFurniture(uploadedFile.id, true)}
-                                className={uploadedFile.withFurniture === true ? "bg-blue-600 hover:bg-blue-700" : ""}
-                              >
-                                Avec meubles
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={uploadedFile.withFurniture === false ? "default" : "outline"}
-                                onClick={() => toggleFurniture(uploadedFile.id, false)}
-                                className={uploadedFile.withFurniture === false ? "bg-blue-600 hover:bg-blue-700" : ""}
-                              >
-                                Sans meubles
-                              </Button>
-                            </div>
-                            {uploadedFile.withFurniture === true && uploadedFile.roomType && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openFurnitureSelector(uploadedFile.id)}
-                                className="w-full gap-2"
-                              >
-                                <Sofa size={16} />
-                                Personnaliser les meubles
-                                {uploadedFile.furnitureIds && uploadedFile.furnitureIds.length > 0 && (
-                                  <span className="ml-auto text-xs text-blue-600">
-                                    ({uploadedFile.furnitureIds.length} sélectionnés)
-                                  </span>
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-
                     {/* Custom Prompt (only for style_personnalise) */}
                     {uploadedFile.transformationType === "style_personnalise" && (
                       <div className="pt-4 border-t border-slate-200 space-y-3">
@@ -1087,6 +1073,70 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
                         </div>
                       )}
                     </div>
+
+                    {/* Furniture Toggle (Individual) */}
+                    <div className="pt-4 border-t border-slate-200 space-y-3">
+                      <Label className="text-sm text-slate-700 font-semibold">
+                        Meubles
+                      </Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => toggleFurnitureMode(uploadedFile.id, true)}
+                          className={`relative p-3 rounded-md border-2 text-left transition-all ${
+                            uploadedFile.withFurniture === true
+                              ? "border-blue-500 bg-blue-50 shadow-sm"
+                              : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${
+                              uploadedFile.withFurniture === true ? "bg-blue-500" : "bg-slate-100"
+                            }`}>
+                              <Sofa
+                                size={16}
+                                className={uploadedFile.withFurniture === true ? "text-white" : "text-slate-600"}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-slate-900">Avec</p>
+                            </div>
+                            {uploadedFile.withFurniture === true && (
+                              <div className="w-5 h-5 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0">
+                                <Check className="text-white" size={12} />
+                              </div>
+                            )}
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => toggleFurnitureMode(uploadedFile.id, false)}
+                          className={`relative p-3 rounded-md border-2 text-left transition-all ${
+                            uploadedFile.withFurniture === false
+                              ? "border-blue-500 bg-blue-50 shadow-sm"
+                              : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${
+                              uploadedFile.withFurniture === false ? "bg-blue-500" : "bg-slate-100"
+                            }`}>
+                              <Sparkles
+                                size={16}
+                                className={uploadedFile.withFurniture === false ? "text-white" : "text-slate-600"}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-slate-900">Sans</p>
+                            </div>
+                            {uploadedFile.withFurniture === false && (
+                              <div className="w-5 h-5 rounded-sm bg-blue-600 flex items-center justify-center flex-shrink-0">
+                                <Check className="text-white" size={12} />
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -1125,22 +1175,6 @@ export function ImageUploader({ onUploadComplete, isUploading = false }: ImageUp
             </Button>
           </div>
         </>
-      )}
-
-      {/* Furniture Selector Dialog */}
-      {furnitureDialogOpen && files[0]?.transformationType && files[0]?.roomType && (
-        <FurnitureSelectorDialog
-          open={furnitureDialogOpen}
-          onOpenChange={setFurnitureDialogOpen}
-          transformationTypeId={files[0].transformationType}
-          roomType={files[0].roomType}
-          onSelect={handleFurnitureSelect}
-          initialSelection={
-            currentFileIdForFurniture
-              ? files.find(f => f.id === currentFileIdForFurniture)?.furnitureIds
-              : files[0]?.furnitureIds
-          }
-        />
       )}
     </div>
   );

@@ -70,6 +70,9 @@ export class ManageImagesService {
       furnitureIds: validatedInput.furnitureIds,
       roomType: validatedInput.roomType,
       customRoom: validatedInput.customRoom,
+      roomWidth: validatedInput.roomWidth,   // 📏 Dimensions de la pièce
+      roomLength: validatedInput.roomLength, // 📏 Dimensions de la pièce
+      roomArea: validatedInput.roomArea,     // 📏 Dimensions de la pièce
     })
 
     return image

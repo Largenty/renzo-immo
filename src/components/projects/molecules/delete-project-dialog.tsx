@@ -16,10 +16,10 @@ import { AlertCircle, Trash2, Loader2 } from "lucide-react";
 interface DeleteProjectDialogProps {
   open: boolean;
   projectName: string;
-  totalImages: number;
+  totalImages?: number;
   isDeleting: boolean;
   onConfirm: () => void;
-  onCancel: () => void;
+  onOpenChange: (open: boolean) => void;
 }
 
 /**
@@ -30,13 +30,19 @@ interface DeleteProjectDialogProps {
 export function DeleteProjectDialog({
   open,
   projectName,
-  totalImages,
+  totalImages = 0,
   isDeleting,
   onConfirm,
-  onCancel,
+  onOpenChange,
 }: DeleteProjectDialogProps) {
+  const handleCancel = () => {
+    if (!isDeleting) {
+      onOpenChange(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onCancel}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-slate-900">
@@ -78,7 +84,7 @@ export function DeleteProjectDialog({
             <Button
               variant="outline"
               className="flex-1"
-              onClick={onCancel}
+              onClick={handleCancel}
               disabled={isDeleting}
             >
               Annuler

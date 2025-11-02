@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FolderOpen } from "lucide-react";
 import { useMemo, memo } from "react";
+import { BLUR_PLACEHOLDERS } from "@/lib/image-blur-utils";
 
 interface ProjectCardProps {
   id: string;
@@ -40,6 +41,8 @@ export const ProjectCard = memo(function ProjectCard({
                 alt={name}
                 fill
                 loading="lazy"
+                placeholder="blur"
+                blurDataURL={BLUR_PLACEHOLDERS.projectCard}
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
               />

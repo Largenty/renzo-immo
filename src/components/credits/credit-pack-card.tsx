@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Package, ShoppingCart } from "lucide-react";
@@ -19,7 +20,7 @@ interface CreditPackCardProps {
   onBuy: (packId: string, packName: string) => void;
 }
 
-export function CreditPackCard({ pack, isProcessing, onBuy }: CreditPackCardProps) {
+export const CreditPackCard = memo(function CreditPackCard({ pack, isProcessing, onBuy }: CreditPackCardProps) {
   return (
     <Card
       className={`modern-card p-6 relative ${
@@ -77,4 +78,4 @@ export function CreditPackCard({ pack, isProcessing, onBuy }: CreditPackCardProp
       </Button>
     </Card>
   );
-}
+});

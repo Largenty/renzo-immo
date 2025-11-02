@@ -1,6 +1,10 @@
+/**
+ * Auth Store - Version simplifiée
+ * Gère l'état de l'utilisateur côté client
+ */
+
 import { create } from 'zustand';
 import { createClient } from '@/lib/supabase/client';
-import { logger } from '@/lib/logger';
 
 interface User {
   id: string;
@@ -16,139 +20,117 @@ interface User {
 interface AuthStore {
   user: User | null;
   isLoading: boolean;
-  isInitialized: boolean;
 
   // Actions
-  checkAuth: () => Promise<void>;
+  initAuth: () => Promise<void>;
   setUser: (user: User | null) => void;
-  updateUser: (data: Partial<User>) => Promise<void>;
   clearUser: () => void;
-  signOut: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthStore>((set, get) => ({
+export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
   isLoading: true,
-  isInitialized: false,
 
-  checkAuth: async () => {
-    if (get().isInitialized) {
-      logger.debug('[AuthStore] Already initialized, skipping...');
-      return; // Déjà vérifié
-    }
-
+  /**
+   * Initialiser l'authentification
+   * À appeler une seule fois au démarrage de l'app
+   */
+  initAuth: async () => {
     try {
-      logger.debug('[AuthStore] Checking auth...');
+      console.log('[AuthStore] Initializing auth...');
+      console.log('[AuthStore] Creating Supabase client...');
       const supabase = createClient();
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('[AuthStore] Supabase client created');
 
-      if (sessionError) {
-        logger.error('[AuthStore] Session error:', sessionError);
-        set({
-          user: null,
-          isLoading: false,
-          isInitialized: true,
-        });
+      // Récupérer l'utilisateur (plus fiable que getSession côté client)
+      console.log('[AuthStore] Calling getUser()...');
+      const { data: { user: authUser }, error } = await supabase.auth.getUser();
+      console.log('[AuthStore] getUser() response received:', { hasUser: !!authUser, hasError: !!error });
+
+      if (error) {
+        console.error('[AuthStore] Auth error:', error);
+        set({ user: null, isLoading: false });
         return;
       }
 
-      logger.debug('[AuthStore] Session:', session ? 'found' : 'not found');
-
-      if (session?.user) {
-        logger.debug('[AuthStore] Fetching user data for:', session.user.id);
-
-        // Récupérer les infos complètes de l'utilisateur
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (userError) {
-          logger.error('[AuthStore] User data error:', userError);
-        }
-
-        logger.debug('[AuthStore] User data:', userData ? 'found' : 'not found');
-
-        set({
-          user: userData ? {
-            id: userData.id,
-            email: userData.email,
-            firstName: userData.first_name,
-            lastName: userData.last_name,
-            avatarUrl: userData.avatar_url,
-            phone: userData.phone,
-            company: userData.company,
-            address: userData.address,
-          } : null,
-          isLoading: false,
-          isInitialized: true,
-        });
-      } else {
-        logger.debug('[AuthStore] No session, setting user to null');
-        set({
-          user: null,
-          isLoading: false,
-          isInitialized: true,
-        });
+      if (!authUser) {
+        console.log('[AuthStore] No user found');
+        set({ user: null, isLoading: false });
+        return;
       }
-    } catch (error) {
-      logger.error('[AuthStore] Unexpected error in checkAuth:', error);
-      set({
-        user: null,
-        isLoading: false,
-        isInitialized: true,
+
+      console.log('[AuthStore] User found, fetching user data from DB...');
+
+      // Récupérer les données utilisateur depuis la DB
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, email, first_name, last_name, avatar_url, phone, company, address')
+        .eq('id', authUser.id)
+        .single();
+
+      console.log('[AuthStore] DB query result:', { hasData: !!userData, hasError: !!userError });
+
+      if (userError) {
+        console.error('[AuthStore] User fetch error:', userError);
+        set({ user: null, isLoading: false });
+        return;
+      }
+
+      const user: User = {
+        id: userData.id,
+        email: userData.email,
+        firstName: userData.first_name,
+        lastName: userData.last_name,
+        avatarUrl: userData.avatar_url,
+        phone: userData.phone,
+        company: userData.company,
+        address: userData.address,
+      };
+
+      console.log('[AuthStore] User loaded:', user.id);
+      set({ user, isLoading: false });
+
+      // Écouter les changements d'authentification
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('[AuthStore] Auth state changed:', event);
+
+        if (event === 'SIGNED_OUT') {
+          set({ user: null });
+        } else if (event === 'SIGNED_IN' && session?.user) {
+          // Recharger les données utilisateur
+          const { data } = await supabase
+            .from('users')
+            .select('id, email, first_name, last_name, avatar_url, phone, company, address')
+            .eq('id', session.user.id)
+            .single();
+
+          if (data) {
+            set({
+              user: {
+                id: data.id,
+                email: data.email,
+                firstName: data.first_name,
+                lastName: data.last_name,
+                avatarUrl: data.avatar_url,
+                phone: data.phone,
+                company: data.company,
+                address: data.address,
+              },
+            });
+          }
+        }
       });
+    } catch (error) {
+      console.error('[AuthStore] Init error:', error);
+      set({ user: null, isLoading: false });
     }
   },
 
   setUser: (user) => {
-    set({ user, isLoading: false, isInitialized: true });
-  },
-
-  updateUser: async (data) => {
-    const currentUser = get().user;
-    if (!currentUser) return;
-
-    set({ isLoading: true });
-
-    try {
-      const supabase = createClient();
-      const updateData: any = {};
-
-      if (data.firstName !== undefined) updateData.first_name = data.firstName;
-      if (data.lastName !== undefined) updateData.last_name = data.lastName;
-      if (data.phone !== undefined) updateData.phone = data.phone;
-      if (data.company !== undefined) updateData.company = data.company;
-      if (data.address !== undefined) updateData.address = data.address;
-      if (data.avatarUrl !== undefined) updateData.avatar_url = data.avatarUrl;
-
-      const { error } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', currentUser.id);
-
-      if (error) throw error;
-
-      // Mettre à jour le store
-      set({
-        user: { ...currentUser, ...data },
-        isLoading: false,
-      });
-    } catch (error: any) {
-      logger.error('[AuthStore] Error updating user:', error);
-      set({ isLoading: false });
-      throw error;
-    }
+    set({ user, isLoading: false });
   },
 
   clearUser: () => {
-    set({ user: null, isLoading: false });
-  },
-
-  signOut: async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    set({ user: null, isLoading: false });
+    set({ user: null });
   },
 }));

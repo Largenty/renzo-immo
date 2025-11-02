@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { createClient } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
 
@@ -13,21 +15,30 @@ interface CreditsStore {
   stats: CreditStats | null;
   isLoading: boolean;
   error: string | null;
+  lastFetch: number | null;
 
   // Actions
   fetchBalance: (userId: string) => Promise<void>;
-  fetchStats: (userId: string) => Promise<void>;
+  fetchStats: (userId: string, force?: boolean) => Promise<void>;
   refreshCredits: (userId: string) => Promise<void>;
 }
 
-export const useCreditsStore = create<CreditsStore>((set) => ({
-  balance: 0,
-  stats: null,
-  isLoading: false,
-  error: null,
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export const useCreditsStore = create<CreditsStore>()(
+  persist(
+    immer((set, get) => ({
+      balance: 0,
+      stats: null,
+      isLoading: false,
+      error: null,
+      lastFetch: null,
 
   fetchBalance: async (userId: string) => {
-    set({ isLoading: true, error: null });
+    set((state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
 
     try {
       const supabase = createClient();
@@ -41,18 +52,33 @@ export const useCreditsStore = create<CreditsStore>((set) => ({
 
       if (userError) throw userError;
 
-      set({
-        balance: userData?.credits_remaining || 0,
-        isLoading: false,
+      set((state) => {
+        state.balance = userData?.credits_remaining || 0;
+        state.isLoading = false;
       });
     } catch (error: any) {
       logger.error('[CreditsStore] Error fetching balance:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
     }
   },
 
-  fetchStats: async (userId: string) => {
-    set({ isLoading: true, error: null });
+  fetchStats: async (userId: string, force = false) => {
+    const now = Date.now();
+    const { lastFetch, stats } = get();
+
+    // ✅ Cache check
+    if (!force && lastFetch && stats && now - lastFetch < CACHE_TTL) {
+      logger.debug('[CreditsStore] Using cached data');
+      return;
+    }
+
+    set((state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
 
     try {
       const supabase = createClient();
@@ -63,26 +89,39 @@ export const useCreditsStore = create<CreditsStore>((set) => ({
 
       if (error) throw error;
 
-      set({
-        stats: {
+      set((state) => {
+        state.stats = {
           balance: data.balance || 0,
           totalEarned: data.total_earned || 0,
           totalSpent: data.total_spent || 0,
-        },
-        balance: data.balance || 0,
-        isLoading: false,
+        };
+        state.balance = data.balance || 0;
+        state.isLoading = false;
+        state.lastFetch = now;
       });
     } catch (error: any) {
       logger.error('[CreditsStore] Error fetching stats:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
     }
   },
 
   refreshCredits: async (userId: string) => {
-    // Rafraîchir à la fois le solde et les stats
-    await Promise.all([
-      useCreditsStore.getState().fetchBalance(userId),
-      useCreditsStore.getState().fetchStats(userId),
-    ]);
+    // ✅ fetchStats récupère déjà le balance, pas besoin de 2 queries!
+    // Réduction: 2 queries → 1 query (50% reduction)
+    await useCreditsStore.getState().fetchStats(userId, true); // force refresh
   },
-}));
+    })),
+    {
+      name: 'renzo-credits-storage',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        balance: state.balance,
+        stats: state.stats,
+        lastFetch: state.lastFetch,
+      }),
+    }
+  )
+);

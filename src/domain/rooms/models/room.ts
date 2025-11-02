@@ -44,6 +44,7 @@ export interface RoomSpecification {
   is_active: boolean
   created_at: Date
   updated_at: Date
+  user_id?: string | null // NULL = pièce par défaut, string = pièce personnalisée
 }
 
 export interface CreateRoomInput {

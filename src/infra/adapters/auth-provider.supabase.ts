@@ -18,6 +18,7 @@ function mapSupabaseUserToDomain(supabaseUser: any, userData: any): User {
     lastName: userData?.last_name || '',
     avatarUrl: userData?.avatar_url,
     company: userData?.company,
+    role: userData?.role as 'user' | 'admin' | undefined,
     emailVerified: supabaseUser.confirmed_at !== null,
     creditsBalance: userData?.credits_remaining || 0,
     subscriptionPlanId: userData?.subscription_plan_id,

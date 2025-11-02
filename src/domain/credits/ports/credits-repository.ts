@@ -7,8 +7,25 @@
 import type {
   CreditTransaction,
   CreditStats,
+  WeeklyStats,
   CreateCreditTransactionInput,
 } from '../models/credit-transaction'
+
+/**
+ * Type pour les filtres de transactions
+ */
+export type TransactionTypeFilter = 'all' | CreditTransaction['type']
+
+/**
+ * Résultat paginé de transactions
+ */
+export interface PaginatedTransactions {
+  transactions: CreditTransaction[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
 
 export interface ICreditsRepository {
   /**
@@ -17,9 +34,25 @@ export interface ICreditsRepository {
   getTransactions(userId: string, limit?: number): Promise<CreditTransaction[]>
 
   /**
+   * Récupérer les transactions paginées avec filtres (optimisé pour la performance)
+   */
+  getTransactionsPaginated(
+    userId: string,
+    page: number,
+    pageSize: number,
+    searchQuery?: string,
+    filterType?: TransactionTypeFilter
+  ): Promise<PaginatedTransactions>
+
+  /**
    * Récupérer les statistiques de crédits d'un utilisateur
    */
   getStats(userId: string): Promise<CreditStats>
+
+  /**
+   * Récupérer les statistiques hebdomadaires (optimisé pour la performance)
+   */
+  getWeeklyStats(userId: string): Promise<WeeklyStats>
 
   /**
    * Créer une nouvelle transaction de crédit

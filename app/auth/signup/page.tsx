@@ -1,17 +1,36 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useCallback, Suspense } from "react";
 import { toast } from "sonner";
 import { useSignUp } from "@/domain/auth";
-import { AuthCard, SignupForm, type SignupFormData } from "@/components/auth";
+import { AuthCard, SignupForm, type SignupFormData, AuthLoading } from "@/components/auth";
 import Link from "next/link";
+import { validatePassword } from "@/lib/validators/password-validator";
+import { AUTH_ERROR_MESSAGES } from "@/lib/constants/auth-errors";
+import { useGoogleAuth } from "@/hooks/use-google-auth";
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const signUpMutation = useSignUp();
+  const errorParam = searchParams.get("error");
 
-  const handleSubmit = async (data: SignupFormData) => {
-    // Validation
+  // ✅ OPTIMIZATION: Use custom hook for Google auth
+  const { signInWithGoogle } = useGoogleAuth();
+
+  // ✅ Gestion des erreurs du callback OAuth
+  useEffect(() => {
+    if (errorParam) {
+      const message =
+        AUTH_ERROR_MESSAGES[errorParam as keyof typeof AUTH_ERROR_MESSAGES] ||
+        "Une erreur est survenue lors de la connexion.";
+      toast.error("Erreur de connexion", { description: message });
+    }
+  }, [errorParam]);
+
+  const handleSubmit = useCallback(async (data: SignupFormData) => {
+    // Validation: mots de passe correspondent
     if (data.password !== data.confirmPassword) {
       toast.error("Erreur", {
         description: "Les mots de passe ne correspondent pas",
@@ -19,43 +38,18 @@ export default function SignupPage() {
       return;
     }
 
-    // ✅ Validation mot de passe conforme au serveur (12 caractères + complexité)
-    if (data.password.length < 12) {
-      toast.error("Erreur", {
-        description: "Le mot de passe doit contenir au moins 12 caractères",
+    // ✅ Validation mot de passe avec le validateur centralisé
+    const passwordValidation = validatePassword(data.password);
+    if (!passwordValidation.valid) {
+      // Afficher toutes les erreurs de validation
+      const firstError = passwordValidation.errors[0];
+      toast.error("Erreur de validation", {
+        description: firstError || "Le mot de passe ne respecte pas les critères de sécurité",
       });
       return;
     }
 
-    // Vérifier la complexité
-    if (!/[a-z]/.test(data.password)) {
-      toast.error("Erreur", {
-        description: "Le mot de passe doit contenir au moins une minuscule",
-      });
-      return;
-    }
-
-    if (!/[A-Z]/.test(data.password)) {
-      toast.error("Erreur", {
-        description: "Le mot de passe doit contenir au moins une majuscule",
-      });
-      return;
-    }
-
-    if (!/[0-9]/.test(data.password)) {
-      toast.error("Erreur", {
-        description: "Le mot de passe doit contenir au moins un chiffre",
-      });
-      return;
-    }
-
-    if (!/[^a-zA-Z0-9]/.test(data.password)) {
-      toast.error("Erreur", {
-        description: "Le mot de passe doit contenir au moins un caractère spécial (!@#$%^&*...)",
-      });
-      return;
-    }
-
+    // Validation: conditions d'utilisation
     if (!data.acceptTerms) {
       toast.error("Erreur", {
         description: "Vous devez accepter les conditions d'utilisation",
@@ -76,24 +70,23 @@ export default function SignupPage() {
         toast.success("Compte créé avec succès !", {
           description: result.message || "Vérifiez votre email pour confirmer votre compte",
         });
+        // Redirection après un court délai pour laisser l'utilisateur voir le message
         setTimeout(() => {
-          router.push("/auth/login");
+          router.push("/auth/login?verified=pending");
         }, 2000);
       } else {
         toast.error("Erreur lors de l'inscription", {
           description: result.error || "Une erreur est survenue",
         });
       }
-    } catch {
+    } catch (error) {
+      console.error("Signup error:", error);
       toast.error("Erreur", {
         description: "Une erreur est survenue lors de l'inscription",
       });
     }
-  };
+  }, [signUpMutation, router]);
 
-  const handleGoogleSignIn = async () => {
-    toast.info("Fonctionnalité Google OAuth à implémenter");
-  };
 
   return (
     <AuthCard
@@ -102,7 +95,7 @@ export default function SignupPage() {
     >
       <SignupForm
         onSubmit={handleSubmit}
-        onGoogleSignIn={handleGoogleSignIn}
+        onGoogleSignIn={signInWithGoogle}
         isLoading={signUpMutation.isPending}
       />
 
@@ -115,5 +108,20 @@ export default function SignupPage() {
         </Link>
       </div>
     </AuthCard>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthLoading
+          title="Créer un compte"
+          subtitle="Transformez vos photos immobilières avec l'IA"
+        />
+      }
+    >
+      <SignupContent />
+    </Suspense>
   );
 }

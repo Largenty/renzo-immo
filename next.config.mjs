@@ -1,4 +1,9 @@
 import { withSentryConfig } from '@sentry/nextjs';
+import bundleAnalyzer from '@next/bundle-analyzer';
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -36,6 +41,10 @@ const nextConfig = {
     config.infrastructureLogging = {
       level: 'error',
     };
+
+    // ✅ NOTE: Tree-shaking is already enabled by default in Next.js
+    // Named imports from lucide-react are automatically tree-shaken
+    // No additional configuration needed
 
     return config;
   },
@@ -100,7 +109,9 @@ const sentryWebpackPluginOptions = {
   project: process.env.SENTRY_PROJECT,
 };
 
-// Exporter la config avec Sentry seulement si DSN est configuré
+// Exporter la config avec Bundle Analyzer et Sentry
+const configWithAnalyzer = withBundleAnalyzer(nextConfig);
+
 export default process.env.NEXT_PUBLIC_SENTRY_DSN
-  ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
-  : nextConfig;
+  ? withSentryConfig(configWithAnalyzer, sentryWebpackPluginOptions)
+  : configWithAnalyzer;

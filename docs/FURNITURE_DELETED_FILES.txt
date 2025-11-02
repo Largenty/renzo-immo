@@ -1,0 +1,39 @@
+# Furniture Feature - Deleted Files List
+# Generated: 2025-11-02
+# Total: 17 files deleted
+
+## API Routes (4 files)
+app/api/furniture/route.ts
+app/api/furniture/[id]/route.ts
+app/api/furniture/catalog/route.ts
+app/api/furniture/preset/route.ts
+
+## Domain Layer (6 files)
+src/domain/furniture/models/furniture.ts
+src/domain/furniture/hooks/use-furniture.ts
+src/domain/furniture/ports/furniture-repository.ts
+src/domain/furniture/services/manage-furniture.ts
+src/domain/furniture/business-rules/validate-furniture.ts
+src/domain/furniture/index.ts
+
+## Repositories (1 file)
+src/repositories/furniture.repository.ts
+
+## UI Components (4 files)
+src/components/furniture/furniture-selector-dialog.tsx
+src/components/furniture/furniture-form-dialog.tsx
+src/components/furniture/furniture-card.tsx
+src/components/furniture/index.ts
+
+## Stores (1 file)
+src/lib/stores/furniture-store.ts
+
+## Dashboard Pages (1 directory)
+app/dashboard/furniture/page.tsx
+app/dashboard/furniture/ (entire directory)
+
+## Total Impact
+- 17 files deleted
+- ~2,600 lines of code removed
+- 4 API endpoints removed
+- 1 dashboard page removed

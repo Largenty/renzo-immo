@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Card, Button, StatusBadge, type StatusType } from "@/components/ui";
 import {
   Download,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import type { Image as ImageType } from "@/domain/images";
+import { BLUR_PLACEHOLDERS } from "@/lib/image-blur-utils";
 
 interface ImageCardProps {
   image: ImageType;
@@ -24,7 +26,7 @@ interface ImageCardProps {
   isGenerating?: boolean;
 }
 
-export function ImageCard({
+export const ImageCard = memo(function ImageCard({
   image,
   transformationLabel,
   onView,
@@ -43,6 +45,8 @@ export function ImageCard({
             alt="Original"
             fill
             loading="lazy"
+            placeholder="blur"
+            blurDataURL={BLUR_PLACEHOLDERS.imageCard}
             className="object-cover"
             sizes="(max-width: 768px) 50vw, 25vw"
           />
@@ -60,6 +64,8 @@ export function ImageCard({
                 alt="Transformé"
                 fill
                 loading="lazy"
+                placeholder="blur"
+                blurDataURL={BLUR_PLACEHOLDERS.imageCard}
                 className="object-cover"
                 sizes="(max-width: 768px) 50vw, 25vw"
               />
@@ -250,4 +256,4 @@ export function ImageCard({
       </div>
     </Card>
   );
-}
+});

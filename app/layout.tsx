@@ -4,14 +4,37 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { AuthStoreProvider } from "@/components/providers/auth-store-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
-import { SEO_CONFIG, JSON_LD_ORGANIZATION, JSON_LD_PRODUCT } from "@/config/seo";
+import {
+  SEO_CONFIG,
+  JSON_LD_ORGANIZATION,
+  JSON_LD_PRODUCT,
+} from "@/config/seo";
 import { ConditionalLayout } from "@/components/layout/conditional-layout";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { logger } from "@/lib/logger";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: SEO_CONFIG.title,
   description: SEO_CONFIG.description,
   keywords: SEO_CONFIG.keywords,
+  metadataBase: new URL(SEO_CONFIG.url),
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   openGraph: {
     title: SEO_CONFIG.title,
     description: SEO_CONFIG.description,
@@ -19,6 +42,7 @@ export const metadata: Metadata = {
     siteName: "Renzo Immobilier",
     locale: SEO_CONFIG.locale,
     type: "website",
+    images: SEO_CONFIG.ogImage ? [{ url: SEO_CONFIG.ogImage }] : undefined,
   },
   twitter: {
     card: "summary_large_image",
@@ -33,34 +57,58 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // ✅ Sérialiser les JSON-LD de manière sécurisée
+  let organizationJsonLd = "";
+  let productJsonLd = "";
+
+  try {
+    organizationJsonLd = JSON.stringify(JSON_LD_ORGANIZATION);
+  } catch (error) {
+    logger.error("Failed to serialize JSON_LD_ORGANIZATION:", error);
+  }
+
+  try {
+    productJsonLd = JSON.stringify(JSON_LD_PRODUCT);
+  } catch (error) {
+    logger.error("Failed to serialize JSON_LD_PRODUCT:", error);
+  }
+
   return (
     <html lang="fr" className={GeistSans.variable}>
       <head>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD_ORGANIZATION) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD_PRODUCT) }}
-        />
+        {/* ✅ JSON-LD pour le SEO */}
+        {organizationJsonLd && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: organizationJsonLd }}
+          />
+        )}
+        {productJsonLd && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: productJsonLd }}
+          />
+        )}
       </head>
       <body className="font-sans">
-        <QueryProvider>
-          <AuthStoreProvider>
-            <AuthProvider>
-              <ConditionalLayout>{children}</ConditionalLayout>
-              <Toaster
-                position="bottom-right"
-                closeButton
-                richColors
-                toastOptions={{
-                  duration: 4000,
-                }}
-              />
-            </AuthProvider>
-          </AuthStoreProvider>
-        </QueryProvider>
+        {/* ✅ ErrorBoundary pour capturer les erreurs dans les providers */}
+        <ErrorBoundary>
+          <QueryProvider>
+            <AuthStoreProvider>
+              <AuthProvider>
+                <ConditionalLayout>{children}</ConditionalLayout>
+                <Toaster
+                  position="bottom-right"
+                  closeButton
+                  richColors
+                  toastOptions={{
+                    duration: 4000,
+                  }}
+                />
+              </AuthProvider>
+            </AuthStoreProvider>
+          </QueryProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

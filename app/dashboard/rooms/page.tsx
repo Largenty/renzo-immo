@@ -1,77 +1,40 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useCurrentUser } from "@/domain/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Plus,
   Home,
-  Trash2,
-  Edit,
   Search,
-  Sofa,
-  BedDouble,
-  ChefHat,
-  Utensils,
-  ShowerHead,
-  Bath,
-  Briefcase,
-  DoorOpen,
-  ArrowRight,
-  Sun,
-  Trees,
-  Car,
-  Wine,
-  Package,
-  WashingMachine,
-  Shirt,
-  Flower2,
-  Layers,
-  HelpCircle,
   CheckCircle2,
   Ruler,
   Shield,
   User,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useRoomsList, useDeleteRoom } from "@/domain/rooms/hooks/use-rooms";
 import { RoomFormDialog } from "@/components/rooms/room-form-dialog";
+import { RoomCard } from "@/components/rooms/room-card";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import type { RoomSpecification } from "@/domain/rooms/models/room";
-import { ROOM_TYPE_LABELS } from "@/domain/rooms/models/room";
-
-// Map des icônes Lucide
-const iconMap: Record<string, any> = {
-  Sofa,
-  BedDouble,
-  ChefHat,
-  Utensils,
-  ShowerHead,
-  Bath,
-  Briefcase,
-  DoorOpen,
-  ArrowRight,
-  Sun,
-  Home,
-  Trees,
-  Car,
-  Wine,
-  Package,
-  WashingMachine,
-  Shirt,
-  Flower2,
-  Layers,
-  HelpCircle,
-};
+import { logger } from "@/lib/logger";
+import { useRouter } from "next/navigation";
 
 export default function RoomsPage() {
-  const { data: user } = useCurrentUser();
-  const { data: roomsList = [], isLoading } = useRoomsList();
+  const router = useRouter();
+  const { data: user, isLoading: isLoadingUser } = useCurrentUser();
+  const { 
+    data: roomsList = [], 
+    isLoading, 
+    error: roomsError 
+  } = useRoomsList();
   const deleteRoomMutation = useDeleteRoom();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,42 +59,91 @@ export default function RoomsPage() {
     });
 
     return {
-      defaultRooms: filtered.filter((room) => !(room as any).user_id), // user_id = NULL
-      userRooms: filtered.filter((room) => !!(room as any).user_id), // user_id = user.id
+      defaultRooms: filtered.filter((room) => !room.user_id), // user_id = NULL
+      userRooms: filtered.filter((room) => !!room.user_id), // user_id = user.id
     };
   }, [roomsList, searchQuery]);
 
   // Vérifier si une pièce peut être modifiée/supprimée par le user
   const canEditRoom = (room: RoomSpecification) => {
-    const roomUserId = (room as any).user_id;
     // Admin peut tout modifier, user peut modifier seulement ses pièces
-    return isAdmin || roomUserId === user?.id;
+    return isAdmin || room.user_id === user?.id;
   };
 
-  const handleEdit = (room: RoomSpecification) => {
+  // ✅ Memoize: Handle edit
+  const handleEdit = useCallback((room: RoomSpecification) => {
     setEditingRoom(room);
     setFormDialogOpen(true);
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
+  // ✅ Memoize: Handle delete
+  const handleDelete = useCallback(async (id: string) => {
+    if (!id) {
+      toast.error("ID de pièce invalide");
+      return;
+    }
+
+    const roomName = roomsList.find(r => r.id === id)?.display_name_fr || "cette pièce";
+    const toastId = toast.loading("Suppression en cours...");
+
     try {
       await deleteRoomMutation.mutateAsync(id);
-      toast.success("Pièce supprimée avec succès");
+
+      toast.success("Pièce supprimée", {
+        id: toastId,
+        description: `${roomName} a été supprimée avec succès`,
+      });
+
       setDeleteConfirmId(null);
     } catch (error) {
-      toast.error("Erreur lors de la suppression");
+      logger.error("Error deleting room:", error);
+      toast.error("Erreur lors de la suppression", {
+        id: toastId,
+        description: error instanceof Error
+          ? error.message
+          : "Impossible de supprimer la pièce",
+      });
     }
-  };
+  }, [deleteRoomMutation, roomsList]);
 
   const handleFormClose = () => {
     setFormDialogOpen(false);
     setEditingRoom(null);
   };
 
+  // ✅ Loading state pour utilisateur
+  if (isLoadingUser) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="p-6 animate-pulse">
+              <div className="h-6 bg-slate-200 rounded w-3/4 mb-4"></div>
+              <div className="h-4 bg-slate-200 rounded w-1/2 mb-2"></div>
+              <div className="h-4 bg-slate-200 rounded w-2/3"></div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Gestion du cas utilisateur non connecté
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-slate-500">Chargement...</p>
+      <div className="max-w-7xl mx-auto">
+        <Card className="p-12 text-center">
+          <AlertCircle className="mx-auto text-red-500 mb-4" size={48} />
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">
+            Non authentifié
+          </h3>
+          <p className="text-slate-600 mb-4">
+            Vous devez être connecté pour accéder aux types de pièces.
+          </p>
+          <Button onClick={() => router.push("/auth/login")} variant="outline">
+            Se connecter
+          </Button>
+        </Card>
       </div>
     );
   }
@@ -204,6 +216,30 @@ export default function RoomsPage() {
         </Card>
       </div>
 
+      {/* Error State */}
+      {roomsError && (
+        <Card className="p-12 text-center bg-red-50 border-red-200">
+          <div className="flex flex-col items-center justify-center">
+            <AlertCircle className="text-red-500 mb-4" size={48} />
+            <h3 className="text-xl font-bold text-red-900 mb-2">
+              Erreur de chargement
+            </h3>
+            <p className="text-red-700 mb-4">
+              {roomsError instanceof Error
+                ? roomsError.message
+                : "Une erreur est survenue lors du chargement des pièces"}
+            </p>
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+              className="border-red-300"
+            >
+              Réessayer
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Rooms List */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -215,7 +251,7 @@ export default function RoomsPage() {
             </Card>
           ))}
         </div>
-      ) : defaultRooms.length === 0 && userRooms.length === 0 ? (
+      ) : !roomsError && defaultRooms.length === 0 && userRooms.length === 0 ? (
         <Card className="p-12 text-center">
           <Home className="mx-auto text-slate-300 mb-4" size={64} />
           <h3 className="text-lg font-semibold text-slate-900 mb-2">
@@ -241,6 +277,9 @@ export default function RoomsPage() {
               <button
                 onClick={() => setDefaultSectionExpanded(!defaultSectionExpanded)}
                 className="flex items-center gap-2 mb-4 w-full hover:opacity-80 transition-opacity"
+                aria-expanded={defaultSectionExpanded}
+                aria-controls="default-rooms-section"
+                aria-label={`${defaultSectionExpanded ? "Masquer" : "Afficher"} les pièces par défaut`}
               >
                 <Shield className="text-blue-600" size={24} />
                 <h2 className="text-xl font-semibold text-slate-900">Pièces par défaut</h2>
@@ -252,72 +291,17 @@ export default function RoomsPage() {
                 )}
               </button>
               {defaultSectionExpanded && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {defaultRooms.map((room) => {
-                  const label = ROOM_TYPE_LABELS[room.room_type];
-                  const IconComponent = label?.icon ? iconMap[label.icon] : Home;
-
-                  return (
-                    <Card key={room.id} className="p-6 hover:shadow-lg transition-shadow">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white">
-                            <IconComponent size={24} />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-slate-900">{room.display_name_fr}</h3>
-                            <p className="text-sm text-slate-500">{room.display_name_en}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 mb-4">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary">{room.room_type}</Badge>
-                        </div>
-
-                        {room.description && (
-                          <p className="text-sm text-slate-600 line-clamp-2">
-                            {room.description}
-                          </p>
-                        )}
-
-                        {(room.typical_area_min || room.typical_area_max) && (
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
-                            <Ruler size={16} />
-                            <span>
-                              {room.typical_area_min && `${room.typical_area_min}m²`}
-                              {room.typical_area_min && room.typical_area_max && " - "}
-                              {room.typical_area_max && `${room.typical_area_max}m²`}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {canEditRoom(room) && (
-                        <div className="flex gap-2 pt-4 border-t">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                            onClick={() => handleEdit(room)}
-                          >
-                            <Edit size={16} className="mr-2" />
-                            Modifier
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDeleteConfirmId(room.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })}
+                <div id="default-rooms-section" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {defaultRooms.map((room) => (
+                    <RoomCard
+                      key={room.id}
+                      room={room}
+                      variant="default"
+                      canEdit={canEditRoom(room)}
+                      onEdit={handleEdit}
+                      onDelete={setDeleteConfirmId}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -329,6 +313,9 @@ export default function RoomsPage() {
               <button
                 onClick={() => setUserSectionExpanded(!userSectionExpanded)}
                 className="flex items-center gap-2 mb-4 w-full hover:opacity-80 transition-opacity"
+                aria-expanded={userSectionExpanded}
+                aria-controls="user-rooms-section"
+                aria-label={`${userSectionExpanded ? "Masquer" : "Afficher"} mes pièces personnalisées`}
               >
                 <User className="text-green-600" size={24} />
                 <h2 className="text-xl font-semibold text-slate-900">Mes pièces personnalisées</h2>
@@ -340,70 +327,17 @@ export default function RoomsPage() {
                 )}
               </button>
               {userSectionExpanded && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {userRooms.map((room) => {
-                  const label = ROOM_TYPE_LABELS[room.room_type];
-                  const IconComponent = label?.icon ? iconMap[label.icon] : Home;
-
-                  return (
-                    <Card key={room.id} className="p-6 hover:shadow-lg transition-shadow">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-white">
-                            <IconComponent size={24} />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-slate-900">{room.display_name_fr}</h3>
-                            <p className="text-sm text-slate-500">{room.display_name_en}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 mb-4">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary">{room.room_type}</Badge>
-                        </div>
-
-                        {room.description && (
-                          <p className="text-sm text-slate-600 line-clamp-2">
-                            {room.description}
-                          </p>
-                        )}
-
-                        {(room.typical_area_min || room.typical_area_max) && (
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
-                            <Ruler size={16} />
-                            <span>
-                              {room.typical_area_min && `${room.typical_area_min}m²`}
-                              {room.typical_area_min && room.typical_area_max && " - "}
-                              {room.typical_area_max && `${room.typical_area_max}m²`}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2 pt-4 border-t">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleEdit(room)}
-                        >
-                          <Edit size={16} className="mr-2" />
-                          Modifier
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDeleteConfirmId(room.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      </div>
-                    </Card>
-                  );
-                })}
+                <div id="user-rooms-section" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {userRooms.map((room) => (
+                    <RoomCard
+                      key={room.id}
+                      room={room}
+                      variant="user"
+                      canEdit={canEditRoom(room)}
+                      onEdit={handleEdit}
+                      onDelete={setDeleteConfirmId}
+                    />
+                  ))}
                 </div>
               )}
             </div>

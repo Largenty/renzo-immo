@@ -1,10 +1,12 @@
 /**
  * Utilitaires pour l'export d'images
  * Téléchargement ZIP, watermark, etc.
+ *
+ * ✅ OPTIMISÉ: Libraries lourdes lazy-loaded
+ * - JSZip (~110KB) et file-saver (~40KB) chargés uniquement quand nécessaire
+ * - Réduction bundle initial: ~150KB
  */
 
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
 import { logger } from '@/lib/logger';
 
 /**
@@ -27,11 +29,15 @@ export interface ExportOptions {
 
 /**
  * Télécharger une seule image
+ * ✅ OPTIMISÉ: Lazy load file-saver uniquement quand utilisé
  */
 export async function downloadImage(url: string, filename: string): Promise<void> {
   try {
     const response = await fetch(url);
     const blob = await response.blob();
+
+    // ✅ Dynamic import: file-saver chargé seulement à l'utilisation
+    const { saveAs } = await import('file-saver');
     saveAs(blob, filename);
   } catch (error) {
     logger.error('Error downloading image:', error);
@@ -69,6 +75,14 @@ export async function downloadImagesAsZip(
     addWatermark = false,
     watermarkText = '',
   } = options;
+
+  // ✅ Dynamic imports: JSZip + file-saver chargés seulement à l'utilisation
+  // Gain: ~150KB retirés du bundle initial
+  const [JSZipModule, { saveAs }] = await Promise.all([
+    import('jszip'),
+    import('file-saver')
+  ]);
+  const JSZip = JSZipModule.default;
 
   const zip = new JSZip();
   let completed = 0;

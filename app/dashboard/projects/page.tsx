@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAuthStore, useProjectsStore } from "@/lib/stores";
+import { useCurrentUser } from "@/domain/auth";
+import { useProjects, useDeleteProject } from "@/domain/projects";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -33,7 +34,10 @@ import {
   MoreVertical,
   Edit,
   Trash2,
+  AlertCircle,
 } from "lucide-react";
+import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 // Composant de skeleton pour une carte de projet
 function ProjectCardSkeleton() {
@@ -58,19 +62,19 @@ function ProjectCardSkeleton() {
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const { user } = useAuthStore();
-  const { projects, isLoading, error, fetchProjects, deleteProject } = useProjectsStore();
+
+  // ✅ Hooks domaine React Query (pattern cohérent avec toutes les pages)
+  const { data: user, isLoading: isLoadingUser } = useCurrentUser();
+  const { data: projects = [], isLoading: isLoadingProjects, error } = useProjects(user?.id);
+  const deleteProjectMutation = useDeleteProject(user?.id);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
-  // Charger les projets au montage
-  useEffect(() => {
-    if (user?.id) {
-      fetchProjects(user.id);
-    }
-  }, [user?.id, fetchProjects]);
+  // ✅ Plus de useEffect manuel - React Query gère l'auto-fetch
 
+  const isLoading = isLoadingUser || isLoadingProjects;
   const isError = !!error;
 
   const filteredProjects = useMemo(() => {
@@ -82,8 +86,9 @@ export default function ProjectsPage() {
     );
   }, [projects, searchQuery]);
 
-  // Formater la date relative
-  const getRelativeTime = (date: Date) => {
+  // ✅ Memoize: Formater la date relative
+  const getRelativeTime = useCallback((dateInput: Date | string) => {
+    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
     const now = new Date();
     const diffInMs = now.getTime() - date.getTime();
     const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
@@ -94,24 +99,69 @@ export default function ProjectsPage() {
     if (diffInDays === 1) return "Hier";
     if (diffInDays < 7) return `Il y a ${diffInDays} jours`;
     return date.toLocaleDateString("fr-FR");
-  };
+  }, []);
 
-  const handleDeleteClick = (projectId: string) => {
+  // ✅ Memoize: Handle delete click
+  const handleDeleteClick = useCallback((projectId: string) => {
     setProjectToDelete(projectId);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
-  const handleDeleteConfirm = async () => {
-    if (projectToDelete) {
-      await deleteProject(projectToDelete);
+  // ✅ Memoize: Handle delete confirm
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!projectToDelete || !user?.id) {
+      return;
+    }
+
+    const projectName = projects.find(p => p.id === projectToDelete)?.name || "le projet";
+
+    const toastId = toast.loading("Suppression du projet...");
+
+    try {
+      await deleteProjectMutation.mutateAsync(projectToDelete);
+
+      toast.success("Projet supprimé", {
+        id: toastId,
+        description: `${projectName} a été supprimé avec succès`,
+      });
+
       setDeleteDialogOpen(false);
       setProjectToDelete(null);
+    } catch (error) {
+      logger.error("Error deleting project:", error);
+      toast.error("Erreur lors de la suppression", {
+        id: toastId,
+        description: error instanceof Error
+          ? error.message
+          : "Impossible de supprimer le projet",
+      });
     }
-  };
+  }, [projectToDelete, deleteProjectMutation, projects, user?.id]);
 
-  const handleEditClick = (projectId: string) => {
+  // ✅ Memoize: Handle edit click
+  const handleEditClick = useCallback((projectId: string) => {
     router.push(`/dashboard/projects/${projectId}/edit`);
-  };
+  }, [router]);
+
+  // ✅ Gestion du cas utilisateur non connecté
+  if (!user) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <Card className="p-12 text-center">
+          <AlertCircle className="mx-auto text-red-500 mb-4" size={48} />
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">
+            Non authentifié
+          </h3>
+          <p className="text-slate-600 mb-4">
+            Vous devez être connecté pour accéder à vos projets.
+          </p>
+          <Button onClick={() => router.push("/auth/login")} variant="outline">
+            Se connecter
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -160,12 +210,13 @@ export default function ProjectsPage() {
               Erreur de chargement
             </h3>
             <p className="text-red-700 mb-4">
-              {error || "Une erreur est survenue lors du chargement des projets."}
+              {error instanceof Error ? error.message : "Une erreur est survenue lors du chargement des projets."}
             </p>
             <Button
               onClick={() => window.location.reload()}
               variant="outline"
               className="border-red-300"
+              disabled={isLoading}
             >
               Réessayer
             </Button>
@@ -256,7 +307,43 @@ export default function ProjectsPage() {
                           </div>
                         )}
 
-
+                        {/* Actions menu */}
+                        <div className="absolute top-3 left-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 glass hover:bg-white/90"
+                                onClick={(e) => e.preventDefault()}
+                              >
+                                <MoreVertical size={16} className="text-slate-700" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleEditClick(project.id);
+                                }}
+                              >
+                                <Edit size={16} className="mr-2" />
+                                Modifier
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleDeleteClick(project.id);
+                                }}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                <Trash2 size={16} className="mr-2" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </Link>
 
@@ -324,8 +411,9 @@ export default function ProjectsPage() {
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-red-600 hover:bg-red-700"
+              disabled={deleteProjectMutation.isPending}
             >
-              Supprimer
+              {deleteProjectMutation.isPending ? "Suppression..." : "Supprimer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

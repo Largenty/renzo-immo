@@ -9,3 +9,4 @@ export * from './organisms';
 
 // Components
 export * from './require-auth';
+export * from './auth-loading';

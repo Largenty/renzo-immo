@@ -17,6 +17,9 @@ export interface CreditTransaction {
   amount: number // Positif pour achat/bonus, négatif pour usage
   type: CreditTransactionType
   description: string
+  imageCount?: number // Nombre d'images générées (pour type 'usage')
+  imageQuality?: 'standard' | 'hd' // Qualité des images générées (pour type 'usage')
+  relatedProjectName?: string // Nom du projet lié
   relatedImageId?: string
   relatedInvoiceId?: string
   createdAt: Date
@@ -27,6 +30,14 @@ export interface CreditStats {
   totalUsed: number
   totalRemaining: number
   transactionsCount: number
+}
+
+export interface WeeklyStats {
+  thisWeekCredits: number
+  lastWeekCredits: number
+  percentageChange: number
+  hdImagesCount: number
+  totalCreditsUsed: number
 }
 
 // ============================================

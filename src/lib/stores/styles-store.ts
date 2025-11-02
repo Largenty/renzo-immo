@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { createClient } from '@/lib/supabase/client';
 import { generateStyleSlug } from '@/domain/styles/business-rules/generate-slug';
 import { logger } from '@/lib/logger';
@@ -43,22 +45,40 @@ interface StylesStore {
   styles: CustomStyle[];
   isLoading: boolean;
   error: string | null;
+  lastFetch: number | null;
 
   // Actions
-  fetchStyles: (userId: string) => Promise<void>;
+  fetchStyles: (userId: string, force?: boolean) => Promise<void>;
   createStyle: (data: CreateStyleData) => Promise<CustomStyle | null>;
   updateStyle: (id: string, data: UpdateStyleData) => Promise<void>;
   deleteStyle: (id: string) => Promise<void>;
   clearStyles: () => void;
 }
 
-export const useStylesStore = create<StylesStore>((set, get) => ({
-  styles: [],
-  isLoading: false,
-  error: null,
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (styles changent rarement)
 
-  fetchStyles: async (userId: string) => {
-    set({ isLoading: true, error: null });
+export const useStylesStore = create<StylesStore>()(
+  persist(
+    immer((set, get) => ({
+      styles: [],
+      isLoading: false,
+      error: null,
+      lastFetch: null,
+
+      fetchStyles: async (userId: string, force = false) => {
+        const now = Date.now();
+        const { lastFetch, styles } = get();
+
+        // ✅ Cache check
+        if (!force && lastFetch && styles.length > 0 && now - lastFetch < CACHE_TTL) {
+          logger.debug('[StylesStore] Using cached data');
+          return;
+        }
+
+        set((state) => {
+          state.isLoading = true;
+          state.error = null;
+        });
 
     try {
       const supabase = createClient();
@@ -72,8 +92,9 @@ export const useStylesStore = create<StylesStore>((set, get) => ({
 
       if (error) throw error;
 
-      set({
-        styles: data.map(s => ({
+      // ✅ Immer: set avec timestamp
+      set((state) => {
+        state.styles = data.map(s => ({
           id: s.id,
           userId: s.user_id,
           slug: s.slug,
@@ -89,17 +110,24 @@ export const useStylesStore = create<StylesStore>((set, get) => ({
           isPublic: s.is_public,
           createdAt: new Date(s.created_at),
           updatedAt: new Date(s.updated_at),
-        })),
-        isLoading: false,
+        }));
+        state.isLoading = false;
+        state.lastFetch = now;
       });
     } catch (error: any) {
       logger.error('[StylesStore] Error fetching styles:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
     }
   },
 
   createStyle: async (data) => {
-    set({ isLoading: true, error: null });
+    set((state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
 
     try {
       const supabase = createClient();
@@ -144,15 +172,19 @@ export const useStylesStore = create<StylesStore>((set, get) => ({
         updatedAt: new Date(style.updated_at),
       };
 
-      set({
-        styles: [newStyle, ...get().styles],
-        isLoading: false,
+      // ✅ Immer: unshift
+      set((state) => {
+        state.styles.unshift(newStyle);
+        state.isLoading = false;
       });
 
       return newStyle;
     } catch (error: any) {
       logger.error('[StylesStore] Error creating style:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
       return null;
     }
   },
@@ -178,20 +210,29 @@ export const useStylesStore = create<StylesStore>((set, get) => ({
 
       if (error) throw error;
 
-      set({
-        styles: get().styles.map(s =>
-          s.id === id ? { ...s, ...data, updatedAt: new Date() } : s
-        ),
-        isLoading: false,
+      // ✅ Immer: mutation directe
+      set((state) => {
+        const style = state.styles.find(s => s.id === id);
+        if (style) {
+          Object.assign(style, data);
+          style.updatedAt = new Date();
+        }
+        state.isLoading = false;
       });
     } catch (error: any) {
       logger.error('[StylesStore] Error updating style:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
     }
   },
 
   deleteStyle: async (id) => {
-    set({ isLoading: true, error: null });
+    set((state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
 
     try {
       const supabase = createClient();
@@ -202,17 +243,36 @@ export const useStylesStore = create<StylesStore>((set, get) => ({
 
       if (error) throw error;
 
-      set({
-        styles: get().styles.filter(s => s.id !== id),
-        isLoading: false,
+      // ✅ Immer: filter
+      set((state) => {
+        state.styles = state.styles.filter(s => s.id !== id);
+        state.isLoading = false;
       });
     } catch (error: any) {
       logger.error('[StylesStore] Error deleting style:', error);
-      set({ error: error.message, isLoading: false });
+      set((state) => {
+        state.error = error.message;
+        state.isLoading = false;
+      });
     }
   },
 
   clearStyles: () => {
-    set({ styles: [], isLoading: false, error: null });
+    set((state) => {
+      state.styles = [];
+      state.isLoading = false;
+      state.error = null;
+      state.lastFetch = null;
+    });
   },
-}));
+    })),
+    {
+      name: 'renzo-styles-storage',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        styles: state.styles,
+        lastFetch: state.lastFetch,
+      }),
+    }
+  )
+);

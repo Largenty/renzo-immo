@@ -1,10 +1,11 @@
 /**
  * PromptBuilder - Modular Prompt Construction System
+ * SIMPLIFIÉ: Sans gestion détaillée des meubles
  *
  * Assemble des prompts dynamiquement à partir de:
  * - Style palette (couleurs, matériaux)
  * - Room specifications (contraintes architecturales)
- * - Furniture items (descriptions adaptées au style)
+ * - Flag withFurniture (simple boolean)
  */
 
 import { createClient } from '@/lib/supabase/server';
@@ -14,6 +15,8 @@ import {
   TEMPLATE_WITHOUT_FURNITURE,
   TEMPLATE_FALLBACK,
   fillTemplate,
+  getNegativePrompt,
+  NEGATIVE_PROMPT_FALLBACK,
 } from './prompt-templates';
 
 // Types
@@ -42,17 +45,21 @@ export type RoomType =
 export interface PromptBuilderParams {
   transformationTypeId: string;
   roomType: RoomType;
-  furnitureIds?: string[];
+  withFurniture?: boolean;  // Toggle: true = with furniture, false = without furniture
   customPrompt?: string | null;
+  roomWidth?: number;  // Largeur de la pièce en mètres (optionnel mais recommandé)
+  roomLength?: number; // Longueur de la pièce en mètres (optionnel mais recommandé)
+  roomArea?: number;   // Surface en m² (optionnel, calculé si width/length fournis)
 }
 
 export interface PromptBuilderResult {
   prompt: string;
+  negativePrompt: string;
   source: 'custom' | 'modular' | 'fallback';
   metadata?: {
     style_name?: string;
     room_name?: string;
-    furniture_count?: number;
+    with_furniture?: boolean;
   };
 }
 
@@ -72,14 +79,6 @@ interface RoomSpec {
   display_name_en: string;
   constraints_text: string;
   zones: Record<string, string> | null;
-}
-
-interface FurnitureVariant {
-  furniture_name_en: string;
-  description: string;
-  materials: string[];
-  colors: string[];
-  details: string | null;
 }
 
 /**
@@ -104,7 +103,9 @@ export class PromptBuilder {
    * Construit le prompt final
    */
   async build(params: PromptBuilderParams): Promise<PromptBuilderResult> {
-    const { transformationTypeId, roomType, furnitureIds = [], customPrompt = null } = params;
+    const { transformationTypeId, roomType, withFurniture = true, customPrompt = null, roomWidth, roomLength, roomArea } = params;
+
+    // 🪑 FURNITURE: Use the provided flag (defaults to true if not specified)
 
     // 1. Si custom prompt fourni, l'utiliser directement
     if (customPrompt && customPrompt.trim().length > 0) {
@@ -115,6 +116,7 @@ export class PromptBuilder {
 
       return {
         prompt: customPrompt.trim(),
+        negativePrompt: getNegativePrompt(withFurniture),
         source: 'custom',
       };
     }
@@ -122,19 +124,18 @@ export class PromptBuilder {
     logger.debug('[PromptBuilder] Building modular prompt', {
       transformationTypeId,
       roomType,
-      furnitureCount: furnitureIds.length,
+      withFurniture,
     });
 
     try {
       // 🔄 RÉSOLUTION SLUG → UUID
-      // Si transformationTypeId est un slug (string sans tirets), le résoudre en UUID
       const resolvedUUID = await this.resolveTransformationTypeId(transformationTypeId);
 
       if (!resolvedUUID) {
         logger.error('[PromptBuilder] Failed to resolve transformation type', {
           transformationTypeId,
         });
-        return this.getFallbackPrompt(transformationTypeId);
+        return this.getFallbackPrompt(transformationTypeId, withFurniture);
       }
 
       logger.debug('[PromptBuilder] Resolved transformation type', {
@@ -142,11 +143,10 @@ export class PromptBuilder {
         resolvedUUID,
       });
 
-      // 2. Récupérer les composants du prompt
-      const [stylePalette, roomSpec, furnitureVariants, transformationType] = await Promise.all([
+      // 2. Récupérer les composants du prompt (SIMPLIFIÉ - sans meubles)
+      const [stylePalette, roomSpec, transformationType] = await Promise.all([
         this.getStylePalette(resolvedUUID),
         this.getRoomSpec(roomType),
-        furnitureIds.length > 0 ? this.getFurnitureVariants(resolvedUUID, furnitureIds) : Promise.resolve([]),
         this.getTransformationType(resolvedUUID),
       ]);
 
@@ -162,7 +162,7 @@ export class PromptBuilder {
           display_name: roomSpec.display_name_fr,
           hasConstraints: !!roomSpec.constraints_text,
         } : null,
-        furnitureVariants: furnitureVariants.map(f => f.furniture_name_en),
+        withFurniture,
         transformationType: transformationType?.name,
       });
 
@@ -170,24 +170,31 @@ export class PromptBuilder {
       const prompt = this.assemblePrompt({
         stylePalette,
         roomSpec,
-        furnitureVariants,
+        hasFurniture: withFurniture,
         transformationTypeName: transformationType?.name || 'Unknown Style',
+        roomWidth,
+        roomLength,
+        roomArea,
       });
+
+      const negativePrompt = getNegativePrompt(withFurniture);
 
       logger.info('[PromptBuilder] Modular prompt built successfully', {
         transformationTypeId,
         roomType,
-        furnitureCount: furnitureVariants.length,
+        withFurniture,
         promptLength: prompt.length,
+        negativePromptLength: negativePrompt.length,
       });
 
       return {
         prompt,
+        negativePrompt,
         source: 'modular',
         metadata: {
           style_name: transformationType?.name,
           room_name: roomSpec?.display_name_en,
-          furniture_count: furnitureVariants.length,
+          with_furniture: withFurniture,
         },
       };
     } catch (error) {
@@ -198,7 +205,7 @@ export class PromptBuilder {
       });
 
       // Fallback: essayer d'utiliser prompt_template
-      return this.getFallbackPrompt(transformationTypeId);
+      return this.getFallbackPrompt(transformationTypeId, withFurniture);
     }
   }
 
@@ -246,48 +253,7 @@ export class PromptBuilder {
   }
 
   /**
-   * Récupère les variantes de meubles pour ce style
-   */
-  private async getFurnitureVariants(
-    transformationTypeId: string,
-    furnitureIds: string[]
-  ): Promise<FurnitureVariant[]> {
-    if (furnitureIds.length === 0) return [];
-
-    const { data, error } = await this.supabase
-      .from('style_furniture_variants')
-      .select(`
-        description,
-        materials,
-        colors,
-        details,
-        furniture:furniture_catalog!inner(name_en)
-      `)
-      .eq('transformation_type_id', transformationTypeId)
-      .in('furniture_id', furnitureIds);
-
-    if (error) {
-      logger.warn('[PromptBuilder] Error fetching furniture variants', {
-        error: error.message,
-        transformationTypeId,
-        furnitureIds,
-      });
-      return [];
-    }
-
-    // @ts-ignore - Supabase typing issue with joins
-    return data.map((item: any) => ({
-      furniture_name_en: item.furniture.name_en,
-      description: item.description,
-      materials: item.materials,
-      colors: item.colors,
-      details: item.details,
-    }));
-  }
-
-  /**
    * Résout un slug ou UUID vers un UUID
-   * Accepte soit un UUID (ex: "abc-123-def") soit un slug (ex: "home_staging_moderne")
    */
   private async resolveTransformationTypeId(input: string): Promise<string | null> {
     // Si c'est déjà un UUID (contient des tirets), le retourner tel quel
@@ -331,25 +297,46 @@ export class PromptBuilder {
 
   /**
    * Assemble le prompt final à partir des composants en utilisant les templates
+   * SIMPLIFIÉ: Ne liste plus les meubles, juste un flag
    */
   private assemblePrompt(components: {
     stylePalette: StylePalette | null;
     roomSpec: RoomSpec | null;
-    furnitureVariants: FurnitureVariant[];
+    hasFurniture: boolean;
     transformationTypeName: string;
+    roomWidth?: number;
+    roomLength?: number;
+    roomArea?: number;
   }): string {
-    const { stylePalette, roomSpec, furnitureVariants, transformationTypeName } = components;
+    const { stylePalette, roomSpec, hasFurniture, transformationTypeName, roomWidth, roomLength, roomArea } = components;
 
     // Préparer les variables pour le template
     const variables: Record<string, string> = {};
 
-    // 1. Room constraints
+    // 1. Room dimensions (NEW - highest priority constraint)
+    const dimensionParts: string[] = [];
+    if (roomWidth && roomLength) {
+      dimensionParts.push(`${roomWidth}m x ${roomLength}m`);
+      // Calculate area if not provided
+      const calculatedArea = roomArea || (roomWidth * roomLength);
+      dimensionParts.push(`(${calculatedArea.toFixed(1)}m²)`);
+    } else if (roomArea) {
+      dimensionParts.push(`${roomArea}m²`);
+    }
+
+    if (dimensionParts.length > 0) {
+      variables.room_dimensions = `\n⚠️ EXACT ROOM DIMENSIONS - MUST PRESERVE (weight: 3.5) ⚠️\nThis room measures: ${dimensionParts.join(' ')}\n• These dimensions are FIXED and CANNOT change\n• Transform style/colors/furniture BUT keep these exact measurements\n• Width and length LOCKED to these values\n• Total area MUST remain ${dimensionParts[dimensionParts.length - 1]}\n`;
+    } else {
+      variables.room_dimensions = '';
+    }
+
+    // 2. Room constraints
     variables.room_constraints = roomSpec?.constraints_text || '';
 
-    // 2. Style name
+    // 3. Style name
     variables.style_name = transformationTypeName;
 
-    // 3. Style palette
+    // 4. Style palette
     const paletteLines: string[] = [];
     if (stylePalette) {
       if (stylePalette.wall_colors && stylePalette.wall_colors.length > 0) {
@@ -373,23 +360,12 @@ export class PromptBuilder {
     }
     variables.style_palette = paletteLines.join('\n');
 
-    // 4. Furniture list
-    const furnitureLines: string[] = [];
-    furnitureVariants.forEach((variant, index) => {
-      const details = variant.details ? ` (${variant.details})` : '';
-      const materials = variant.materials?.length ? ` - Materials: ${variant.materials.join(', ')}` : '';
-      const colors = variant.colors?.length ? ` - Colors: ${variant.colors.join(', ')}` : '';
-      furnitureLines.push(`${index + 1}. ${variant.description}${details}${materials}${colors}`);
-    });
-    variables.furniture_list = furnitureLines.join('\n');
-
     // 5. Room name
     variables.room_name = roomSpec?.display_name_en || 'space';
 
     // 6. Final instruction
-    const hasFurniture = furnitureVariants.length > 0;
     if (hasFurniture) {
-      variables.final_instruction = `${transformationTypeName} ${variables.room_name.toLowerCase()} with specified furniture, maintaining original architecture.`;
+      variables.final_instruction = `${transformationTypeName} ${variables.room_name.toLowerCase()} with appropriate furniture, maintaining original architecture.`;
     } else {
       variables.final_instruction = `Empty ${variables.room_name.toLowerCase()} with original walls, floors, and architecture UNCHANGED.`;
     }
@@ -410,7 +386,7 @@ export class PromptBuilder {
   /**
    * Fallback si le système modulaire échoue
    */
-  private async getFallbackPrompt(transformationTypeId: string): Promise<PromptBuilderResult> {
+  private async getFallbackPrompt(transformationTypeId: string, withFurniture: boolean): Promise<PromptBuilderResult> {
     logger.debug('[PromptBuilder] Using fallback prompt_template', {
       transformationTypeId,
     });
@@ -428,16 +404,19 @@ export class PromptBuilder {
       });
 
       return {
-        prompt: this.getEmergencyFallbackPrompt(),
+        prompt: this.getEmergencyFallbackPrompt(withFurniture),
+        negativePrompt: NEGATIVE_PROMPT_FALLBACK,
         source: 'fallback',
       };
     }
 
     return {
       prompt: data.prompt_template,
+      negativePrompt: NEGATIVE_PROMPT_FALLBACK,
       source: 'fallback',
       metadata: {
         style_name: data.name,
+        with_furniture: withFurniture,
       },
     };
   }
@@ -445,10 +424,15 @@ export class PromptBuilder {
   /**
    * Emergency fallback générique
    */
-  private getEmergencyFallbackPrompt(): string {
+  private getEmergencyFallbackPrompt(withFurniture: boolean): string {
+    const furnitureInstruction = withFurniture
+      ? 'Add appropriate furniture for the space.'
+      : '';
+
     return `Transform this interior space.
 Keep the same room structure and layout (windows, doors, ceiling).
-Create a clean, professional look suitable for real estate marketing.`;
+Create a clean, professional look suitable for real estate marketing.
+${furnitureInstruction}`;
   }
 }
 
@@ -458,30 +442,4 @@ Create a clean, professional look suitable for real estate marketing.`;
 export async function buildPrompt(params: PromptBuilderParams): Promise<PromptBuilderResult> {
   const builder = await PromptBuilder.create();
   return builder.build(params);
-}
-
-/**
- * Récupère le preset par défaut pour un style + room
- */
-export async function getDefaultPreset(transformationTypeId: string, roomType: RoomType): Promise<string[] | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from('room_furniture_presets')
-    .select('furniture_ids')
-    .eq('transformation_type_id', transformationTypeId)
-    .eq('room_type', roomType)
-    .eq('is_system', true)
-    .eq('is_active', true)
-    .single();
-
-  if (error || !data) {
-    logger.debug('[PromptBuilder] No default preset found', {
-      transformationTypeId,
-      roomType,
-    });
-    return null;
-  }
-
-  return data.furniture_ids;
 }

@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { SupabaseCreditsRepository } from '@/infra/adapters/credits-repository.supabase'
@@ -13,6 +13,7 @@ import { ConsumeCreditsService } from '../services/consume-credits'
 import { AddCreditsService } from '../services/add-credits'
 import { GetCreditStatsService } from '../services/get-credit-stats'
 import type { ConsumeCreditsInput, AddCreditsInput } from '../models/credit-transaction'
+import type { TransactionTypeFilter } from '../ports/credits-repository'
 import { InsufficientCreditsError } from '../business-rules/validate-credit-balance'
 
 /**
@@ -140,5 +141,75 @@ export function useAddCredits(userId: string | undefined) {
         description: error instanceof Error ? error.message : 'Une erreur est survenue',
       })
     },
+  })
+}
+
+/**
+ * Hook : Récupérer les transactions paginées avec filtres (optimisé pour la performance)
+ * Utilise la pagination côté serveur pour éviter de charger toutes les transactions
+ */
+export function useCreditTransactionsPaginated(
+  userId: string | undefined,
+  page: number = 1,
+  pageSize: number = 15,
+  searchQuery: string = '',
+  filterType: TransactionTypeFilter = 'all'
+) {
+  return useQuery({
+    queryKey: ['credit-transactions-paginated', userId, page, pageSize, searchQuery, filterType],
+    queryFn: async () => {
+      if (!userId) throw new Error('User ID is required')
+
+      const supabase = createClient()
+      const repository = new SupabaseCreditsRepository(supabase)
+
+      return repository.getTransactionsPaginated(userId, page, pageSize, searchQuery, filterType)
+    },
+    enabled: !!userId,
+    staleTime: 30 * 1000, // 30 seconds
+    placeholderData: keepPreviousData, // Garde les données pendant le chargement de la nouvelle page
+  })
+}
+
+/**
+ * Hook : Exporter toutes les transactions en CSV
+ * Charge toutes les transactions SEULEMENT lors de l'export (non bloquant)
+ */
+export function useExportTransactions(userId: string | undefined) {
+  return useMutation({
+    mutationFn: async () => {
+      if (!userId) throw new Error('User ID is required')
+
+      const supabase = createClient()
+      const repository = new SupabaseCreditsRepository(supabase)
+
+      // Charge toutes les transactions (limite haute pour l'export)
+      return repository.getTransactions(userId, 10000)
+    },
+    onError: (error) => {
+      toast.error("Erreur lors de l'export", {
+        description: error instanceof Error ? error.message : 'Une erreur est survenue',
+      })
+    },
+  })
+}
+
+/**
+ * Hook : Récupérer les statistiques hebdomadaires (optimisé pour la performance)
+ * Utilise une fonction SQL pour calculer les stats sans charger toutes les transactions
+ */
+export function useWeeklyStats(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['weekly-stats', userId],
+    queryFn: async () => {
+      if (!userId) throw new Error('User ID is required')
+
+      const supabase = createClient()
+      const repository = new SupabaseCreditsRepository(supabase)
+
+      return repository.getWeeklyStats(userId)
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes (stats hebdo changent peu souvent)
   })
 }

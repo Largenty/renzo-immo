@@ -16,6 +16,7 @@ export interface User {
   lastName: string
   avatarUrl?: string
   company?: string
+  role?: 'user' | 'admin' // Role de l'utilisateur (admin peut gérer furniture & rooms)
   emailVerified: boolean
   creditsBalance: number
   subscriptionPlanId?: string
@@ -49,6 +50,7 @@ export const userSchema = z.object({
   lastName: z.string().min(1).max(100),
   avatarUrl: z.string().url().optional(),
   company: z.string().max(200).optional(),
+  role: z.enum(['user', 'admin']).optional(),
   emailVerified: z.boolean(),
   creditsBalance: z.number().int().nonnegative(),
   subscriptionPlanId: z.string().uuid().optional(),
