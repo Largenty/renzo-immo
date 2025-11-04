@@ -1,0 +1,26 @@
+#!/bin/bash
+
+echo "======================================================================"
+echo "📋 MIGRATIONS À APPLIQUER SUR SUPABASE"
+echo "======================================================================"
+echo ""
+echo "Allez sur: https://app.supabase.com"
+echo "Puis: SQL Editor > New Query"
+echo ""
+echo "======================================================================"
+echo "MIGRATION 1/2: Système de crédits"
+echo "======================================================================"
+echo "Fichier: supabase/migrations/20251103_create_credits_system.sql"
+echo "----------------------------------------------------------------------"
+cat supabase/migrations/20251103_create_credits_system.sql
+echo ""
+echo "======================================================================"
+echo "MIGRATION 2/2: Fonctions de statistiques"
+echo "======================================================================"
+echo "Fichier: supabase/migrations/20251103_create_stats_functions.sql"
+echo "----------------------------------------------------------------------"
+cat supabase/migrations/20251103_create_stats_functions.sql
+echo ""
+echo "======================================================================"
+echo "✅ Après avoir appliqué ces 2 migrations, relancez l'application"
+echo "======================================================================"

@@ -2,20 +2,21 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/domain/auth";
 import { useProject, useDeleteProject } from "@/domain/projects";
-import { useProjectImages, useDeleteImage, useUploadImage, useGenerateImage, useImagePolling } from "@/domain/images";
+import { useProjectImages, useDeleteImage, useUploadImage, useGenerateImage } from "@/domain/images";
 import { useAllTransformationTypes } from "@/domain/styles";
-import { Card } from "@/components/ui";
-import { ImageUploader } from "@/components/upload/image-uploader";
+import { Card } from "@/presentation/shared/ui";
+import { ImageUploader } from "@/presentation/features/upload/image-uploader";
 import { Upload } from "lucide-react";
 import type { RoomType } from "@/../types/dashboard";
 import type { Image as ImageType } from "@/domain/images";
 import { downloadImagesAsZip } from "@/lib/export-utils";
-import { ShareDialog } from "@/components/ui/share-dialog";
+import { ShareProjectDialog } from "@/presentation/features/projects/share-project-dialog";
 import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/presentation/shared/ui/button";
 import {
   ProjectHeader,
   ProjectStats,
@@ -24,11 +25,11 @@ import {
   ProjectNotFound,
   ProjectLoadingSkeleton,
   ProjectCoverBanner,
-} from "@/components/projects";
-import { ImageGridCard } from "@/components/projects/molecules/image-grid-card";
-import { ImageViewerDialog } from "@/components/projects/molecules/image-viewer-dialog";
-import { DeleteConfirmDialog } from "@/components/projects/molecules/delete-confirm-dialog";
-import { DeleteProjectDialog } from "@/components/projects/molecules/delete-project-dialog";
+} from "@/presentation/features/projects";
+import { ImageGridCard } from "@/presentation/features/projects/molecules/image-grid-card";
+import { ImageViewerDialog } from "@/presentation/features/projects/molecules/image-viewer-dialog";
+import { DeleteConfirmDialog } from "@/presentation/features/projects/molecules/delete-confirm-dialog";
+import { DeleteProjectDialog } from "@/presentation/features/projects/molecules/delete-project-dialog";
 import { logger } from '@/lib/logger';
 
 interface UploadedFile {
@@ -41,11 +42,13 @@ interface UploadedFile {
   roomWidth?: number;  // 📏 Largeur en mètres
   roomLength?: number; // 📏 Longueur en mètres
   roomArea?: number;   // 📏 Surface en m²
+  strength?: number;   // 🎚️ Intensité de la transformation IA (0-1, défaut: 0.15)
 }
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const projectId = typeof params.id === "string" ? params.id : null;
   const { data: user, isLoading: isLoadingUser } = useCurrentUser();
 
@@ -83,13 +86,9 @@ export default function ProjectDetailPage() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  // ✅ POLLING: Vérifier automatiquement le statut des images en cours de traitement
-  const { pollingCount, isPolling } = useImagePolling({
-    images,
-    projectId: projectId || "",
-    enabled: !!projectId, // Seulement si projectId est valide
-    interval: 5000, // Vérifier toutes les 5 secondes
-  });
+  // TODO: Implement proper polling for multiple images
+  // usePollingGenerationStatus is designed for single image polling
+  // For now, images are polled via API route checks
 
   const filteredImages = useMemo(() => {
     return images.filter((img) => {
@@ -160,6 +159,7 @@ export default function ProjectDetailPage() {
               roomWidth: uploadedFile.roomWidth,   // 📏 Dimensions de la pièce
               roomLength: uploadedFile.roomLength, // 📏 Dimensions de la pièce
               roomArea: uploadedFile.roomArea,     // 📏 Dimensions de la pièce
+              strength: uploadedFile.strength,     // 🎚️ Intensité de la transformation IA
             },
           });
         })
@@ -313,6 +313,36 @@ export default function ProjectDetailPage() {
     return type?.label || typeId;
   }, [transformationTypes]);
 
+  // ✅ Memoize: Handle toggle public visibility
+  const handleTogglePublic = useCallback(async (isPublic: boolean) => {
+    if (!projectId || !user?.id) return;
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/toggle-public`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isPublic }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erreur lors de la mise à jour');
+      }
+
+      const data = await response.json();
+
+      // Force refetch the project data
+      await queryClient.invalidateQueries({ queryKey: ['projects', user.id, projectId] });
+
+      toast.success(isPublic ? 'Projet publié' : 'Projet rendu privé');
+    } catch (error) {
+      logger.error('Error toggling public:', error);
+      toast.error('Erreur lors de la mise à jour');
+    }
+  }, [projectId, user?.id, queryClient]);
+
   // ✅ Gestion des cas d'erreur
   if (!projectId) {
     return (
@@ -410,6 +440,10 @@ export default function ProjectDetailPage() {
             isUploading={uploadImageMutation.isPending}
           />
         }
+        projectSlug={project.slug}
+        userDisplayName={user?.displayName}
+        isPublic={project.isPublic}
+        onTogglePublic={handleTogglePublic}
       />
 
       {/* Cover Image */}
@@ -524,11 +558,16 @@ export default function ProjectDetailPage() {
       />
 
       {/* Share Dialog */}
-      <ShareDialog
+      <ShareProjectDialog
+        projectId={projectId}
+        projectName={project.name}
+        projectSlug={project.slug || ''}
+        userDisplayName={user?.displayName || user?.firstName || ''}
+        isPublic={project.isPublic || false}
+        onTogglePublic={handleTogglePublic}
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
-        shareUrl={window.location.href}
-        title={project.name}
+        trigger={<div style={{ display: 'none' }} />}
       />
     </div>
   );

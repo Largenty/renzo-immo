@@ -23,6 +23,8 @@ export interface User {
   lastLoginAt?: Date
   createdAt: Date
   updatedAt: Date
+  // Showcase field
+  displayName?: string // For public showcase URLs
 }
 
 export interface Session {
@@ -57,6 +59,7 @@ export const userSchema = z.object({
   lastLoginAt: z.date().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
+  displayName: z.string().max(100).optional(),
 })
 
 export const sessionSchema = z.object({

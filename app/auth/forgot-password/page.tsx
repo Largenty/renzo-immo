@@ -3,10 +3,10 @@
 import { useState, useCallback, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AuthCard, AuthLoading } from "@/components/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AuthCard, AuthLoading } from "@/presentation/features/auth";
+import { Button } from "@/presentation/shared/ui/button";
+import { Input } from "@/presentation/shared/ui/input";
+import { Label } from "@/presentation/shared/ui/label";
 import { Mail, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";

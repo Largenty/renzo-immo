@@ -6,15 +6,15 @@ import { useCurrentUser } from "@/domain/auth";
 import {
   ProjectForm,
   type ProjectFormData,
-} from "@/components/projects/project-form";
-import { EditProjectHeader } from "@/components/projects/molecules/edit-project-header";
-import { EditProjectLoadingState } from "@/components/projects/molecules/edit-project-loading-state";
-import { ProjectNotFound } from "@/components/projects/project-not-found";
+} from "@/presentation/features/projects/project-form";
+import { EditProjectHeader } from "@/presentation/features/projects/molecules/edit-project-header";
+import { EditProjectLoadingState } from "@/presentation/features/projects/molecules/edit-project-loading-state";
+import { ProjectNotFound } from "@/presentation/features/projects/project-not-found";
 import { logger } from '@/lib/logger';
 import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/presentation/shared/ui/card";
+import { Button } from "@/presentation/shared/ui/button";
 
 export default function EditProjectPage() {
   const router = useRouter();

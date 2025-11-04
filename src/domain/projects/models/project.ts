@@ -20,6 +20,11 @@ export interface Project {
   completedImages: number
   createdAt: Date
   updatedAt: Date
+  // Showcase fields
+  slug?: string
+  isPublic?: boolean
+  viewCount?: number
+  lastViewedAt?: Date
 }
 
 export interface ProjectStats {
@@ -49,6 +54,11 @@ export const projectSchema = z.object({
   completedImages: z.number().int().nonnegative(),
   createdAt: z.date(),
   updatedAt: z.date(),
+  // Showcase fields
+  slug: z.string().max(255).optional(),
+  isPublic: z.boolean().optional(),
+  viewCount: z.number().int().nonnegative().optional(),
+  lastViewedAt: z.date().optional(),
 })
 
 export const projectStatsSchema = z.object({
@@ -75,6 +85,7 @@ export const updateProjectInputSchema = z.object({
   address: z.string().max(500).nullable().optional(),
   description: z.string().max(2000).nullable().optional(),
   coverImageUrl: z.string().url().nullable().optional(),
+  isPublic: z.boolean().optional(),
 })
 
 // ============================================

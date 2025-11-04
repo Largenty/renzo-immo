@@ -248,7 +248,7 @@ export async function retryWithBackoff<T>(
 
       // Wait before retrying with exponential backoff
       const delay = calculateBackoffDelay(attempt);
-      logger.debug(`⏳ Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms...`);
+      // Debug: Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }

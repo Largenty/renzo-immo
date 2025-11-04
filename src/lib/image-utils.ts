@@ -266,7 +266,7 @@ export async function compressImages(
       }
       return result;
     } catch (error) {
-      logger.error(`Failed to compress ${file.name}:`, error);
+      console.error(`Failed to compress ${file.name}:`, error);
       completed++;
       if (onProgress) {
         onProgress(Math.round((completed / files.length) * 100));

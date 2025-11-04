@@ -1,51 +1,51 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
-import { Hero } from "@/components/sections/hero";
-import { LogosMarquee } from "@/components/sections/logos-marquee";
-import { SolutionsGrid } from "@/components/sections/solutions-grid";
-import { HowItWorks } from "@/components/sections/how-it-works";
-import { ErrorBoundary } from "@/components/error-boundary";
+import { Hero } from "@/presentation/features/sections/hero";
+import { LogosMarquee } from "@/presentation/features/sections/logos-marquee";
+import { SolutionsGrid } from "@/presentation/features/sections/solutions-grid";
+import { HowItWorks } from "@/presentation/features/sections/how-it-works";
+import { ErrorBoundary } from "@/presentation/shared/error-boundary";
 import { SEO_CONFIG } from "@/config/seo";
 
 // ✅ Lazy load les sections non-critiques pour améliorer les performances initiales
 const BeforeAfter = dynamic(() =>
-  import("@/components/sections/before-after").then((mod) => ({
+  import("@/presentation/features/sections/before-after").then((mod) => ({
     default: mod.BeforeAfter,
   })),
   { ssr: true }
 );
 
 const ShowcaseGrid = dynamic(() =>
-  import("@/components/sections/showcase-grid").then((mod) => ({
+  import("@/presentation/features/sections/showcase-grid").then((mod) => ({
     default: mod.ShowcaseGrid,
   })),
   { ssr: true }
 );
 
 const ResultsKPIs = dynamic(() =>
-  import("@/components/sections/results-kpis").then((mod) => ({
+  import("@/presentation/features/sections/results-kpis").then((mod) => ({
     default: mod.ResultsKPIs,
   })),
   { ssr: true }
 );
 
 const ForWhom = dynamic(() =>
-  import("@/components/sections/for-whom").then((mod) => ({
+  import("@/presentation/features/sections/for-whom").then((mod) => ({
     default: mod.ForWhom,
   })),
   { ssr: true }
 );
 
 const PricingSales = dynamic(() =>
-  import("@/components/sections/pricing-sales").then((mod) => ({
+  import("@/presentation/features/sections/pricing-sales").then((mod) => ({
     default: mod.PricingSales,
   })),
   { ssr: true }
 );
 
 const ContactForm = dynamic(() =>
-  import("@/components/sections/contact-form").then((mod) => ({
+  import("@/presentation/features/sections/contact-form").then((mod) => ({
     default: mod.ContactForm,
   })),
   { ssr: true }

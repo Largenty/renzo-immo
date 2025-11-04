@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/presentation/shared/ui/button";
 import { useCreateProject } from "@/domain/projects";
 import { useCurrentUser } from "@/domain/auth";
 import Link from "next/link";
@@ -9,13 +9,13 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import {
   ProjectForm,
   type ProjectFormData,
-} from "@/components/projects/project-form";
-import { InfoCard } from "@/components/dashboard/atoms/info-card";
-import { TipsList } from "@/components/dashboard/molecules/tips-list";
+} from "@/presentation/features/projects/project-form";
+import { InfoCard } from "@/presentation/features/dashboard/atoms/info-card";
+import { TipsList } from "@/presentation/features/dashboard/molecules/tips-list";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Card } from "@/presentation/shared/ui/card";
 
 const projectTips = [
   {

@@ -1,0 +1,169 @@
+/**
+ * Modèle du domaine : Project
+ * Représente un projet immobilier
+ */
+
+import { z } from 'zod'
+
+// ============================================
+// TYPES
+// ============================================
+
+export interface Project {
+  id: string
+  userId: string
+  name: string
+  address?: string
+  description?: string
+  coverImageUrl?: string
+  totalImages: number
+  completedImages: number
+  createdAt: Date
+  updatedAt: Date
+  // Showcase fields
+  slug?: string
+  isPublic?: boolean
+  viewCount?: number
+  lastViewedAt?: Date
+}
+
+export interface ProjectStats {
+  totalImages: number
+  completedImages: number
+  pendingImages: number
+  processingImages: number
+  failedImages: number
+}
+
+export interface ProjectWithStats extends Project {
+  stats: ProjectStats
+}
+
+// ============================================
+// SCHÉMAS ZOD (validation)
+// ============================================
+
+export const projectSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  address: z.string().max(500).optional(),
+  description: z.string().max(2000).optional(),
+  coverImageUrl: z.string().url().optional(),
+  totalImages: z.number().int().nonnegative(),
+  completedImages: z.number().int().nonnegative(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  // Showcase fields
+  slug: z.string().max(255).optional(),
+  isPublic: z.boolean().optional(),
+  viewCount: z.number().int().nonnegative().optional(),
+  lastViewedAt: z.date().optional(),
+})
+
+export const projectStatsSchema = z.object({
+  totalImages: z.number().int().nonnegative(),
+  completedImages: z.number().int().nonnegative(),
+  pendingImages: z.number().int().nonnegative(),
+  processingImages: z.number().int().nonnegative(),
+  failedImages: z.number().int().nonnegative(),
+})
+
+// ============================================
+// SCHÉMAS D'ENTRÉE
+// ============================================
+
+export const createProjectInputSchema = z.object({
+  name: z.string().min(1, 'Le nom du projet est requis').max(200, 'Le nom est trop long'),
+  address: z.string().max(500, 'L\'adresse est trop longue').optional(),
+  description: z.string().max(2000, 'La description est trop longue').optional(),
+  coverImage: typeof File !== 'undefined' ? z.instanceof(File).optional() : z.any().optional(),
+})
+
+export const updateProjectInputSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  address: z.string().max(500).nullable().optional(),
+  description: z.string().max(2000).nullable().optional(),
+  coverImageUrl: z.string().url().nullable().optional(),
+  isPublic: z.boolean().optional(),
+})
+
+// ============================================
+// TYPES INFÉRÉS
+// ============================================
+
+export type CreateProjectInput = z.infer<typeof createProjectInputSchema>
+export type UpdateProjectInput = z.infer<typeof updateProjectInputSchema>
+/**
+ * Port : Project Storage
+ * Interface abstraite pour gérer le stockage des fichiers liés aux projets
+ */
+
+export interface IProjectStorage {
+  /**
+   * Uploader une image de couverture pour un projet
+   */
+  uploadCoverImage(file: File): Promise<string>
+
+  /**
+   * Supprimer une image de couverture
+   */
+  deleteCoverImage(imageUrl: string): Promise<void>
+
+  /**
+   * Uploader une image de projet
+   */
+  uploadProjectImage(projectId: string, file: File): Promise<string>
+
+  /**
+   * Supprimer toutes les images d'un projet
+   */
+  deleteProjectImages(projectId: string): Promise<void>
+}
+/**
+ * Port : Projects Repository
+ * Interface abstraite pour accéder aux projets
+ */
+
+import type { Project, CreateProjectInput, UpdateProjectInput, ProjectStats } from '../models/project'
+
+export interface IProjectsRepository {
+  /**
+   * Récupérer tous les projets d'un utilisateur
+   */
+  getProjects(userId: string): Promise<Project[]>
+
+  /**
+   * Récupérer un projet par ID
+   */
+  getProjectById(projectId: string, userId: string): Promise<Project | null>
+
+  /**
+   * Créer un nouveau projet
+   */
+  createProject(
+    userId: string,
+    input: Omit<CreateProjectInput, 'coverImage'> & { coverImageUrl?: string }
+  ): Promise<Project>
+
+  /**
+   * Mettre à jour un projet
+   */
+  updateProject(projectId: string, userId: string, input: UpdateProjectInput): Promise<Project>
+
+  /**
+   * Supprimer un projet
+   */
+  deleteProject(projectId: string, userId: string): Promise<void>
+
+  /**
+   * Récupérer les statistiques d'un projet
+   */
+  getProjectStats(projectId: string): Promise<ProjectStats>
+
+  /**
+   * Mettre à jour les compteurs d'images
+   * ✅ SECURITY: userId requis pour validation RLS
+   */
+  updateImageCounters(projectId: string, userId: string, totalImages: number, completedImages: number): Promise<void>
+}

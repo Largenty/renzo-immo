@@ -4,11 +4,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useCallback, Suspense } from "react";
 import { toast } from "sonner";
 import { useSignIn } from "@/domain/auth";
-import { AuthCard, LoginForm, AuthLoading } from "@/components/auth";
+import { AuthCard, LoginForm, AuthLoading } from "@/presentation/features/auth";
 import Link from "next/link";
 import { isValidRedirectPath } from "@/lib/api/helpers";
 import { AUTH_ERROR_MESSAGES } from "@/lib/constants/auth-errors";
-import { useGoogleAuth } from "@/hooks/use-google-auth";
+import { useGoogleAuth } from "@/lib/hooks/use-google-auth";
 
 function LoginContent() {
   const router = useRouter();

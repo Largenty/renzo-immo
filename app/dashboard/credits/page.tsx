@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { TrendingUp, ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/domain/auth";
@@ -20,7 +21,7 @@ import {
   UsageHistoryTable,
   CreditsInfoCard,
   type UsageHistoryItem,
-} from "@/components/credits";
+} from "@/presentation/features/credits";
 
 // ✅ Mapper les transactions vers UsageHistoryItem avec colonnes structurées
 function mapTransactionsToUsageHistory(
@@ -55,14 +56,29 @@ function mapTransactionsToUsageHistory(
 
 export default function CreditsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
   const [selectedPack, setSelectedPack] = useState<string | null>(null);
 
+  // ✅ Rafraîchir les données si on revient d'un paiement réussi
+  useEffect(() => {
+    if (searchParams?.get('refresh') === 'true') {
+      queryClient.invalidateQueries({ queryKey: ['credit-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['credit-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['credit-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-stats'] });
+
+      // Nettoyer l'URL sans recharger la page
+      window.history.replaceState({}, '', '/dashboard/credits');
+
+      toast.success('Vos crédits ont été mis à jour');
+    }
+  }, [searchParams, queryClient]);
+
   // ✅ Récupérer les données optimisées
   const { data: stats, isLoading: statsLoading } = useCreditStats(user?.id);
-  const { data: balance, isLoading: balanceLoading } = useCreditBalance(
-    user?.id
-  );
+  const { data: balance, isLoading: balanceLoading } = useCreditBalance();
   const { data: weeklyStats, isLoading: weeklyStatsLoading } = useWeeklyStats(
     user?.id
   );
@@ -85,19 +101,37 @@ export default function CreditsPage() {
     [transactions]
   );
 
-  const handleBuyPack = (packId: string, packName: string) => {
+  const handleBuyPack = async (packId: string, packName: string) => {
     setSelectedPack(packId);
 
-    // TODO: Implémenter le vrai flow d'achat (Stripe, etc.)
-    // Pour l'instant, rediriger vers la page de checkout
-    toast.info(`Redirection vers le paiement pour ${packName}...`);
-    // router.push(`/checkout?pack=${packId}`);
+    try {
+      toast.info(`Redirection vers le paiement pour ${packName}...`);
 
-    // Simuler l'achat temporairement
-    setTimeout(() => {
-      toast.success(`Pack ${packName} acheté avec succès !`);
+      // Create Stripe Checkout session
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ creditPackId: packId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de la création de la session de paiement');
+      }
+
+      const { url } = await response.json();
+
+      // Redirect to Stripe Checkout
+      if (url) {
+        window.location.href = url;
+      }
+    } catch (error) {
+      toast.error('Erreur lors du paiement', {
+        description: error instanceof Error ? error.message : 'Impossible de créer la session',
+      });
       setSelectedPack(null);
-    }, 1000);
+    }
   };
 
   const handleChangePlan = () => {
@@ -142,29 +176,37 @@ export default function CreditsPage() {
             <div className="space-y-6">
               <StatsCard
                 icon={TrendingUp}
-                iconColor="bg-gradient-to-br from-green-500 to-emerald-600"
-                label="Cette semaine"
+                iconColor={
+                  weeklyStats && weeklyStats.percentageChange > 0
+                    ? "bg-gradient-to-br from-orange-500 to-red-500"
+                    : weeklyStats && weeklyStats.percentageChange < 0
+                      ? "bg-gradient-to-br from-green-500 to-emerald-600"
+                      : "bg-gradient-to-br from-slate-400 to-slate-500"
+                }
+                label="Crédits utilisés cette semaine"
                 value={weeklyStats?.thisWeekCredits ?? 0}
                 subtitle={
                   weeklyStats && weeklyStats.percentageChange !== 0
-                    ? `${weeklyStats.percentageChange > 0 ? "+" : ""}${weeklyStats.percentageChange}% vs semaine dernière`
+                    ? `${Math.abs(weeklyStats.percentageChange)}% ${
+                        weeklyStats.percentageChange > 0 ? "de plus" : "de moins"
+                      } que la semaine dernière`
                     : "Aucun changement"
                 }
                 subtitleColor={
                   weeklyStats && weeklyStats.percentageChange > 0
-                    ? "text-green-600"
+                    ? "text-orange-600"
                     : weeklyStats && weeklyStats.percentageChange < 0
-                      ? "text-red-600"
+                      ? "text-green-600"
                       : "text-slate-600"
                 }
               />
 
               <StatsCard
                 icon={ImageIcon}
-                iconColor="bg-gradient-to-br from-orange-500 to-red-600"
-                label="Images HD"
+                iconColor="bg-gradient-to-br from-blue-500 to-indigo-600"
+                label="Images générées"
                 value={weeklyStats?.hdImagesCount ?? 0}
-                subtitle={`${weeklyStats?.totalCreditsUsed ?? 0} crédits utilisés cette semaine`}
+                subtitle={`${weeklyStats?.totalCreditsUsed ?? 0} crédits consommés cette semaine`}
               />
             </div>
           </div>
@@ -202,8 +244,18 @@ export default function CreditsPage() {
                   />
                 ))}
                 {creditPacks.length === 0 && (
-                  <div className="col-span-full py-12 text-center text-slate-600">
-                    Aucun pack de crédits disponible
+                  <div className="col-span-full">
+                    <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 p-12 text-center">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                        <ImageIcon className="h-6 w-6 text-slate-400" />
+                      </div>
+                      <h3 className="mt-4 text-lg font-semibold text-slate-900">
+                        Aucun pack disponible
+                      </h3>
+                      <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">
+                        Les packs de crédits sont en cours de configuration. Revenez bientôt pour acheter des crédits supplémentaires.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

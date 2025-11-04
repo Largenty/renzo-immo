@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/presentation/shared/ui/button";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -17,10 +17,10 @@ import {
   Palette,
   Home,
 } from "lucide-react";
-import { LogoutModal } from "@/components/modals/logout-modal";
-import { ErrorBoundary } from "@/components/error-boundary";
+import { LogoutModal } from "@/presentation/shared/modals/logout-modal";
+import { ErrorBoundary } from "@/presentation/shared/error-boundary";
 import { useCurrentUser } from "@/domain/auth";
-import { useCreditBalance } from "@/domain/credits/hooks/use-credits";
+import { useCreditBalance } from "@/domain/credits";
 import { logger } from '@/lib/logger';
 
 const navigation = [
@@ -44,7 +44,7 @@ export default function DashboardLayout({
 
   // ✅ Hooks domaine React Query (pattern cohérent avec toutes les pages)
   const { data: user, isLoading: isLoadingUser } = useCurrentUser();
-  const { data: creditsBalance, error: creditsError } = useCreditBalance(user?.id);
+  const { data: creditsBalance, error: creditsError } = useCreditBalance();
 
   // ⚠️ IMPORTANT: Ne pas bloquer le rendu ici
   // Le middleware garantit déjà que l'utilisateur est authentifié

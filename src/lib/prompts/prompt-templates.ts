@@ -22,210 +22,89 @@
 
 /**
  * Template optimisé pour transformations AVEC meubles
- * Ultra-simplifié: NanoBanana gère tout
+ * Format concis et lisible
  */
-export const TEMPLATE_WITH_FURNITURE = `IMAGE-TO-IMAGE transformation: Apply {{style_name}} style to this {{room_name}} while preserving EXACT spatial structure. Professional architectural photography, wide-angle lens, natural lighting, 8K resolution, photorealistic real estate image.
+export const TEMPLATE_WITH_FURNITURE = `IMAGE-TO-IMAGE transformation: Apply {{style_name}} style to this {{room_name}} while preserving the EXACT room geometry and camera perspective.
 
-===== CRITICAL: PRESERVE ORIGINAL IMAGE STRUCTURE (weight: 3.0) =====
+Resolution: Ultra-high-res, photorealistic real estate image, cinematic natural lighting, professional wide-angle photography.
+
+===== CRITICAL CONSTRAINTS (structural preservation) =====
 {{room_dimensions}}
-⚠️ STRICT GEOMETRIC PRESERVATION - NO MODIFICATIONS ALLOWED ⚠️
-
-TRANSFORM ONLY: Colors, materials, furniture, lighting, decorations
-PRESERVE 100%: Room size, walls, doors, windows, ceiling, floor layout, perspective
-
-1. EXACT ROOM DIMENSIONS (weight: 3.0)
-   • Room size CANNOT change - same width, length, height
-   • If room is small, keep it small. If large, keep it large.
-   • NO expanding or shrinking the space
-   • Wall-to-wall distances LOCKED
-   • Ceiling height FIXED
-
-2. PRESERVE EVERY ARCHITECTURAL ELEMENT (weight: 3.0)
-   • COUNT all walls/doors/windows in original → MUST match exactly in output
-   • Door positions CANNOT move (left/right/center stays same)
-   • Window positions LOCKED (same wall, same location)
-   • Doorframes, openings, passages: EXACT same shape and position
-   • If there's an entrance on the right → MUST remain on the right
-   • If there's NO door on a wall → MUST stay empty
-   • Radiators, pipes, fixed elements: KEEP in place
-
-3. PERSPECTIVE LOCK (weight: 3.0)
-   • SAME camera position, height, angle - ZERO deviation
-   • Vanishing points CANNOT shift
-   • Floor plane horizontal, walls vertical
-   • NO rotation, tilt, or perspective change
-
-4. SPATIAL COHERENCE (weight: 2.5)
-   • Floor ONLY horizontal on ground
-   • Walls ONLY vertical from floor to ceiling
-   • Door openings lead to spaces (not blocked by walls)
-   • Window openings show light/outside (not filled)
-   • All corners and junctions aligned correctly
+(Weight: 3.0)
+• Keep all walls, doors, windows, and ceiling exactly as in input.
+• No new openings, no displacement of existing elements.
+• Perspective, vanishing points, and camera angle LOCKED.
+• Maintain same floor plan, wall layout, and window orientation.
+• Preserve lighting direction from input photo.
 
 {{room_constraints}}
 
-===== STYLE APPLICATION =====
-
-TARGET: {{style_name}}
-
-Apply this style palette precisely:
+===== STYLE: {{style_name}} =====
 {{style_palette}}
 
-The transformation MUST reflect {{style_name}} through:
-• Specified wall colors applied accurately
-• Floor materials from the palette only
-• Cohesive aesthetic matching style keywords
-• Appropriate lighting for the style
-• Add furniture appropriate for this {{room_name}} in {{style_name}} style
-
-⚠️ FURNITURE SCALE & REALISM (weight: 3.0) ⚠️
-CRITICAL: Use realistic, FULL-SIZE furniture appropriate for room type
-• Bedrooms: FULL-SIZE double/queen bed (160-180cm width minimum, NOT single, NOT undersized)
-• Living rooms: FULL-SIZE sofa matching wall length proportionally
-• Furniture should FILL and ANCHOR the space - room must feel FURNISHED not sparse
-• NO miniature furniture, NO dollhouse scale, NO tiny items, NO undersized pieces
-• Standard furniture dimensions: double bed 160cm+ width, queen bed 180cm+ width
+Add realistic {{style_name}} {{room_name}} furniture:
+• Bedrooms: full-size double/queen bed (160–180cm width minimum)
+• Living rooms: full-size sofa matching wall length proportionally
+• Furniture should FILL and ANCHOR the space – room must feel FURNISHED, not sparse
 • All furniture GROUNDED with proper weight, shadows, and realistic proportions
+• NO miniature furniture, NO dollhouse scale, NO undersized pieces
 
-===== LIGHTING & REALISM =====
+===== REALISM & PHOTOGRAPHIC QUALITY =====
+• Maintain depth and shadows consistent with input light direction.
+• Realistic scale and grounding for all furniture.
+• Sharp textures and clean materials.
+• Cinematic exposure, balanced contrast, soft diffusion.
+• Professional photography quality lighting.
 
-• Match original natural light direction
-• Add artificial lighting enhancing {{style_name}}
-• Consistent shadows across all elements
-• Proper light fall-off and depth graduation
-• Professional photography quality lighting
-• HDR-style exposure capturing all details
-
-===== FINAL OUTPUT =====
-
-{{final_instruction}}
-
-⚠️ FINAL CRITICAL CHECKS (weight: 3.0) ⚠️
-
-BEFORE generating, verify:
-✓ Room dimensions unchanged (same size as input)
-✓ ALL doors/windows in SAME positions as input
-✓ Door count matches input (if 1 door in input → 1 door in output)
-✓ Window count matches input
-✓ NO new openings created, NO existing openings removed
-✓ Camera angle identical to input
-✓ Perspective lines match input
-✓ Furniture proportionally sized (fills space well, not undersized or lost in room)
-✓ For bedrooms: bed is focal point and reaches AT LEAST halfway across window
-✓ Bed size appropriate: 160-180cm for double bed, dominates space visually
-✓ Balanced layout with clearances (60-80cm around bed)
-✓ Only colors/materials/furniture changed - NOTHING ELSE
-
-OUTPUT REQUIREMENTS:
-✓ IMAGE-TO-IMAGE transformation respecting input structure
-✓ {{style_name}} style applied ONLY to surfaces and objects
-✓ Architectural shell preserved 100%
-✓ Professional photorealistic quality`
+Final Output:
+→ Photorealistic {{style_name}} {{room_name}} home-staged version of the input image.
+→ Preserve 100% of geometry and layout; transform only materials, colors, and decor.`
 
 /**
  * Template optimisé pour dépersonnalisation (SANS meubles)
+ * Format concis et lisible
  */
-export const TEMPLATE_WITHOUT_FURNITURE = `IMAGE-TO-IMAGE transformation: Apply {{style_name}} style to this {{room_name}} while preserving EXACT spatial structure. Remove movable furniture, keep fixed architecture. Professional architectural photography, wide-angle lens, natural lighting, 8K resolution, photorealistic real estate image.
+export const TEMPLATE_WITHOUT_FURNITURE = `IMAGE-TO-IMAGE transformation: Apply {{style_name}} style to this {{room_name}} while preserving the EXACT room geometry and camera perspective. Remove all movable furniture and personal items.
 
-===== CRITICAL: PRESERVE ORIGINAL IMAGE STRUCTURE (weight: 3.0) =====
+Resolution: Ultra-high-res, photorealistic real estate image, cinematic natural lighting, professional wide-angle photography.
+
+===== CRITICAL CONSTRAINTS (structural preservation) =====
 {{room_dimensions}}
-⚠️ STRICT GEOMETRIC PRESERVATION - NO MODIFICATIONS ALLOWED ⚠️
-
-TRANSFORM ONLY: Colors, materials, lighting, remove furniture
-PRESERVE 100%: Room size, walls, doors, windows, ceiling, floor layout, perspective
-
-1. EXACT ROOM DIMENSIONS (weight: 3.0)
-   • Room size CANNOT change - same width, length, height
-   • If room is small, keep it small. If large, keep it large.
-   • NO expanding or shrinking the space
-   • Wall-to-wall distances LOCKED
-   • Ceiling height FIXED
-
-2. PRESERVE EVERY ARCHITECTURAL ELEMENT (weight: 3.0)
-   • COUNT all walls/doors/windows in original → MUST match exactly in output
-   • Door positions CANNOT move (left/right/center stays same)
-   • Window positions LOCKED (same wall, same location)
-   • Doorframes, openings, passages: EXACT same shape and position
-   • If there's an entrance on the right → MUST remain on the right
-   • If there's NO door on a wall → MUST stay empty
-   • Radiators, pipes, fixed elements: KEEP in place
-
-3. PERSPECTIVE LOCK (weight: 3.0)
-   • SAME camera position, height, angle - ZERO deviation
-   • Vanishing points CANNOT shift
-   • Floor plane horizontal, walls vertical
-   • NO rotation, tilt, or perspective change
-
-4. SPATIAL COHERENCE (weight: 2.5)
-   • Floor ONLY horizontal on ground
-   • Walls ONLY vertical from floor to ceiling
-   • Door openings lead to spaces (not blocked by walls)
-   • Ceiling meets walls at correct angles
-   • All surfaces properly connected
-   • No floating or disconnected elements
+(Weight: 3.0)
+• Keep all walls, doors, windows, and ceiling exactly as in input.
+• No new openings, no displacement of existing elements.
+• Perspective, vanishing points, and camera angle LOCKED.
+• Maintain same floor plan, wall layout, and window orientation.
+• Preserve lighting direction from input photo.
 
 {{room_constraints}}
 
-===== STYLE APPLICATION =====
-
-STYLE: {{style_name}}
-
-Apply this palette:
+===== STYLE: {{style_name}} =====
 {{style_palette}}
 
 ===== DEPERSONALIZATION RULES =====
-
-REMOVE ONLY (movable items):
+REMOVE (movable items):
 • Furniture: sofas, tables, chairs, beds, dressers, freestanding shelves
-• Decorations: wall art, photos, posters (hanging)
-• Personal items: electronics, books, decorative objects, potted plants
-• Freestanding lamps and lighting (table/floor lamps)
-• Textiles: area rugs, carpets, cushions, throws
-• Any portable belongings
+• Decorations: wall art, photos, posters, personal items
+• Freestanding lamps, textiles (rugs, cushions), portable objects
 
-PRESERVE EVERYTHING ELSE (fixed elements):
-• Fixed lighting: chandeliers, ceiling lights, wall sconces, pendant lights
-• Window treatments: curtains, drapes, blinds, shutters
-• Built-in elements: cabinets, shelves, fireplace mantels, moldings
-• Architectural details: wainscoting, chair rails, crown molding, cornices
-• All flooring: wood, tiles, stone (just remove rugs on top)
-• All walls: paint, wallpaper, texture, paneling
-• Doors, windows, frames, handles, hardware
+PRESERVE (fixed elements):
+• Fixed lighting: chandeliers, ceiling lights, wall sconces
+• Window treatments: curtains, drapes, blinds
+• Built-in elements: cabinets, shelves, moldings
+• All flooring, walls, doors, windows, frames, hardware
 • Radiators, vents, fixed utilities
 
-GOLDEN RULE: When in doubt, KEEP IT. If unsure whether fixed or movable, preserve it.
+===== REALISM & PHOTOGRAPHIC QUALITY =====
+• Maintain depth and shadows consistent with input light direction.
+• Shadows reveal clean, empty space geometry.
+• Sharp textures and clean materials.
+• Cinematic exposure, balanced contrast, soft diffusion.
+• Professional photography quality lighting.
 
-===== LIGHTING & ATMOSPHERE =====
-
-• Maintain original natural light direction and quality
-• Preserve window light and architectural lighting fixtures
-• Shadows should reveal clean, empty space geometry
-• Light naturally fills the room showing wall/floor textures
-• Professional, well-exposed photography
-
-===== FINAL OUTPUT =====
-
-{{final_instruction}}
-
-⚠️ FINAL CRITICAL CHECKS (weight: 3.0) ⚠️
-
-BEFORE generating, verify:
-✓ Room dimensions unchanged (same size as input)
-✓ ALL doors/windows in SAME positions as input
-✓ Door count matches input (if 1 door in input → 1 door in output)
-✓ Window count matches input
-✓ NO new openings created, NO existing openings removed
-✓ Camera angle identical to input
-✓ Perspective lines match input
-✓ Only colors/materials changed + furniture removed - NOTHING ELSE
-
-OUTPUT REQUIREMENTS:
-✓ IMAGE-TO-IMAGE transformation respecting input structure
-✓ {{style_name}} style applied ONLY to surfaces
-✓ Architectural shell preserved 100%
-✓ Space completely empty of movable furniture
-✓ Fixed elements (lighting, built-ins) preserved
-✓ Professional photorealistic quality`
+Final Output:
+→ Photorealistic empty {{style_name}} {{room_name}} depersonalized version of the input image.
+→ Preserve 100% of geometry and layout; transform only materials and colors, remove movable items.`
 
 /**
  * Template de fallback simplifié

@@ -17,7 +17,7 @@ export type { IUsersRepository } from './ports/users-repository'
 export { AuthenticateService } from './services/authenticate'
 export { ManageUserService } from './services/manage-user'
 
-// Hooks (React)
+// Hooks (React) - Re-export from application layer
 export {
   useCurrentUser,
   useSession,
@@ -26,4 +26,4 @@ export {
   useSignOut,
   useResetPassword,
   useUpdateUser,
-} from './hooks/use-auth'
+} from '@/application/auth/use-auth'

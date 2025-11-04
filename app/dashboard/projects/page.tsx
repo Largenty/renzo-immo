@@ -1,17 +1,17 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@/presentation/shared/ui/card";
+import { Button } from "@/presentation/shared/ui/button";
+import { Input } from "@/presentation/shared/ui/input";
+import { Skeleton } from "@/presentation/shared/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/presentation/shared/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@/presentation/shared/ui/alert-dialog";
 import { useCurrentUser } from "@/domain/auth";
 import { useProjects, useDeleteProject } from "@/domain/projects";
 import Link from "next/link";

@@ -19,16 +19,17 @@ export { ConsumeCreditsService } from './services/consume-credits'
 export { AddCreditsService } from './services/add-credits'
 export { GetCreditStatsService } from './services/get-credit-stats'
 
-// Hooks (React)
+// Hooks (React) - Re-export from application layer
 export {
   useCreditStats,
   useCreditTransactions,
   useCreditTransactionsPaginated,
   useExportTransactions,
   useWeeklyStats,
-  useCreditBalance,
   useConsumeCredits,
   useAddCredits,
-} from './hooks/use-credits'
+} from '@/application/credits/use-credits'
 
-export { useCreditPacks } from './hooks/use-credit-packs'
+export { useCreditPacks } from '@/application/credits/use-credit-packs'
+export { useCreditBalance } from '@/application/credits/use-credit-balance'
+export { usePurchaseCredits } from '@/application/credits/use-purchase-credits'

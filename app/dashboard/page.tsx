@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, PageHeader, StatCard } from "@/components/ui";
-import { ProjectCard, EmptyState } from "@/components/projects";
+import { Button, PageHeader, StatCard } from "@/presentation/shared/ui";
+import { ProjectCard, EmptyState } from "@/presentation/features/projects";
 import Link from "next/link";
 import {
   FolderOpen,
@@ -17,7 +17,7 @@ import { useCreditStats } from "@/domain/credits";
 import { useCurrentUser } from "@/domain/auth";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/card";
+import { Card } from "@/presentation/shared/ui/card";
 
 // ✅ Helper: Format date to ISO string
 const formatDate = (date: Date | string): string => {
@@ -81,7 +81,7 @@ export default function DashboardPage() {
       },
       {
         name: "Crédits restants",
-        value: creditStats?.balance?.toString() || "0",
+        value: creditStats?.totalRemaining?.toString() || "0",
         icon: Sparkles,
         change: creditStats?.totalPurchased ? `sur ${creditStats.totalPurchased}` : "Aucun achat",
         changeType: "neutral" as const,
@@ -221,16 +221,17 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <EmptyState
-            icon={FolderOpen}
-            title="Aucun projet"
-            description="Créez votre premier projet pour commencer"
-            action={{
-              label: "Créer un projet",
-              onClick: () => router.push('/dashboard/projects/new'),
-            }}
-            className="col-span-full"
-          />
+          <div className="col-span-full">
+            <EmptyState
+              icon={FolderOpen}
+              title="Aucun projet"
+              description="Créez votre premier projet pour commencer"
+              action={{
+                label: "Créer un projet",
+                onClick: () => router.push('/dashboard/projects/new'),
+              }}
+            />
+          </div>
         )}
       </div>
 

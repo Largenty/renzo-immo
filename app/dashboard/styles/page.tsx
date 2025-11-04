@@ -7,18 +7,18 @@ import {
   useCreateCustomStyle,
   useUpdateCustomStyle,
   useDeleteCustomStyle,
-} from "@/domain/styles/hooks/use-styles";
-import { Button } from "@/components/ui/button";
+} from "@/domain/styles";
+import { Button } from "@/presentation/shared/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/presentation/shared/ui/dialog";
 import { Plus, Loader2, AlertCircle } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/presentation/shared/ui/skeleton";
+import { Card } from "@/presentation/shared/ui/card";
 import { toast } from "sonner";
 import {
   PageHeaderWithAction,
@@ -26,8 +26,8 @@ import {
   StyleCard,
   StyleFormDialog,
   type StyleFormData,
-} from "@/components/dashboard";
-import { EmptyState } from "@/components/projects";
+} from "@/presentation/features/dashboard";
+import { EmptyState } from "@/presentation/features/projects";
 import { logger } from "@/lib/logger";
 import { useRouter } from "next/navigation";
 

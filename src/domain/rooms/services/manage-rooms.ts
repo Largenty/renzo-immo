@@ -114,7 +114,7 @@ export class ManageRoomsService {
             constraints_text: data.constraints_text || currentRoom.constraints_text,
             typical_area_min: data.typical_area_min !== undefined ? data.typical_area_min : currentRoom.typical_area_min,
             typical_area_max: data.typical_area_max !== undefined ? data.typical_area_max : currentRoom.typical_area_max,
-            zones: data.zones !== undefined ? data.zones : currentRoom.zones,
+            zones: data.zones !== undefined ? (data.zones || undefined) : (currentRoom.zones || undefined),
             description: data.description !== undefined ? data.description : currentRoom.description,
           };
 

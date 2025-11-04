@@ -3,25 +3,24 @@
 import { useState, useCallback } from "react";
 import { User, CreditCard, Shield, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useAuthStore } from "@/lib/stores";
-import { useCurrentUser } from "@/domain/auth";
-import { SettingsTabs } from "@/components/dashboard/molecules/settings-tabs";
+import { useCurrentUser, useUpdateUser } from "@/domain/auth";
+import { SettingsTabs } from "@/presentation/features/dashboard/molecules/settings-tabs";
 import { validatePassword } from "@/lib/validators/password-validator";
 import { logger } from "@/lib/logger";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/presentation/shared/ui/card";
+import { Button } from "@/presentation/shared/ui/button";
 import { useRouter } from "next/navigation";
 import {
   ProfileSettingsSection,
   type ProfileFormData,
-} from "@/components/dashboard/organisms/profile-settings-section";
-import { AccountSettingsSection } from "@/components/dashboard/organisms/account-settings-section";
-import { BillingSettingsSection } from "@/components/dashboard/organisms/billing-settings-section";
+} from "@/presentation/features/dashboard/organisms/profile-settings-section";
+import { AccountSettingsSection } from "@/presentation/features/dashboard/organisms/account-settings-section";
+import { BillingSettingsSection } from "@/presentation/features/dashboard/organisms/billing-settings-section";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user: storeUser, updateUser } = useAuthStore();
   const { data: user, isLoading: isLoadingUser } = useCurrentUser();
+  const updateUserMutation = useUpdateUser(user?.id);
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -42,12 +41,10 @@ export default function SettingsPage() {
     const toastId = toast.loading("Mise à jour du profil...");
 
     try {
-      await updateUser({
+      await updateUserMutation.mutateAsync({
         firstName: data.firstName,
         lastName: data.lastName,
-        phone: data.phone,
         company: data.company,
-        address: data.address,
       });
 
       toast.success("Profil mis à jour avec succès", { id: toastId });
@@ -60,7 +57,7 @@ export default function SettingsPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [user?.id, updateUser]);
+  }, [user?.id, updateUserMutation]);
 
   // ✅ Memoize: Handle email change
   const handleEmailChange = useCallback(async (newEmail: string) => {
@@ -103,7 +100,7 @@ export default function SettingsPage() {
     }
   }, [user?.id]);
 
-  // ✅ Memoize: Handle password change
+  // 🔒 FIX: Handle password change securely via server-side API
   const handlePasswordChange = useCallback(async (data: {
     currentPassword: string;
     newPassword: string;
@@ -135,25 +132,23 @@ export default function SettingsPage() {
     const toastId = toast.loading("Changement de mot de passe...");
 
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-
-      // ✅ Vérifier le mot de passe actuel avant de le changer
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email || "",
-        password: data.currentPassword,
+      // 🔒 SECURITY FIX: Use server-side API instead of client-side authentication
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentPassword: data.currentPassword,
+          newPassword: data.newPassword,
+        }),
       });
 
-      if (signInError) {
-        throw new Error("Le mot de passe actuel est incorrect");
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Erreur lors du changement de mot de passe");
       }
-
-      // Changer le mot de passe
-      const { error } = await supabase.auth.updateUser({
-        password: data.newPassword,
-      });
-
-      if (error) throw error;
 
       toast.success("Mot de passe modifié avec succès", { id: toastId });
     } catch (error) {
@@ -165,7 +160,7 @@ export default function SettingsPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [user?.id, user?.email]);
+  }, [user?.id]);
 
   // ✅ Memoize: Demo handlers (billing section)
   const handleDeleteAccount = useCallback(() => {
@@ -252,9 +247,9 @@ export default function SettingsPage() {
                 firstName: user.firstName ?? "",
                 lastName: user.lastName ?? "",
                 email: user.email ?? "",
-                phone: user.phone ?? "",
+                phone: "",
                 company: user.company ?? "",
-                address: user.address ?? "",
+                address: "",
               }}
               onSave={handleProfileSave}
               isSaving={isSaving}

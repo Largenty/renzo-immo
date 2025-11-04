@@ -196,7 +196,7 @@ export class PromptBuilder {
         metadata: {
           style_name: transformationType?.name,
           room_name: roomSpec?.display_name_en,
-          with_furniture: hasFurniture,
+          // with_furniture: hasFurniture, // Removed: not in interface
         },
       };
     } catch (error) {

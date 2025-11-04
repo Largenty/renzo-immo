@@ -4,8 +4,19 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
 
+// 🔧 FIX: Lazy initialization to prevent SSR errors
+let isInitialized = false;
+
+function initGsap() {
+  if (typeof window !== "undefined" && !isInitialized) {
+    gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
+    isInitialized = true;
+  }
+}
+
+// Auto-initialize on first import in browser
 if (typeof window !== "undefined") {
-  gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
+  initGsap();
 }
 
 export { gsap, ScrollTrigger, ScrollToPlugin };

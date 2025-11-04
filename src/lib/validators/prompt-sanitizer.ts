@@ -148,7 +148,7 @@ export function sanitizeAndValidatePrompt(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors[0]?.message || 'Prompt invalide',
+        error: error.issues[0]?.message || 'Prompt invalide',
       }
     }
     return {

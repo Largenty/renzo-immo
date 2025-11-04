@@ -134,7 +134,7 @@ export function validateRequest<T>(
       return {
         success: false,
         error: 'Validation failed',
-        details: error.errors.map((e) => `${e.path.join('.')}: ${e.message}`),
+        details: error.issues.map((e) => `${e.path.join('.')}: ${e.message}`),
       }
     }
     return {

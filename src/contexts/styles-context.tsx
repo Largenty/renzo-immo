@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import type { CustomStyle } from "@/types/dashboard";
+import type { CustomStyle } from "@/../types/dashboard";
 
 // Mock initial styles
 const initialStyles: CustomStyle[] = [

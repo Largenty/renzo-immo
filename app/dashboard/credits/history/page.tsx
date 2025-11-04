@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card } from "@/presentation/shared/ui/card";
+import { Button } from "@/presentation/shared/ui/button";
+import { Input } from "@/presentation/shared/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/presentation/shared/ui/select";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/domain/auth";

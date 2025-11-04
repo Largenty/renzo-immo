@@ -1,27 +1,27 @@
 /**
  * Domaine Styles - Point d'entrée
- * Export tous les éléments publics du domaine
  */
 
 // Models
-export * from './models/transformation-style'
-
-// Business Rules
-export * from './business-rules/generate-slug'
+export * from './models/transformation-type'
+export * from './models/custom-style'
+export * from './models/room-specification'
+export * from './models/furniture'
 
 // Ports
 export type { IStylesRepository } from './ports/styles-repository'
 
 // Services
+export { GetTransformationTypesService } from './services/get-transformation-types'
 export { ManageCustomStylesService } from './services/manage-custom-styles'
-export { GetTransformationTypesService, defaultTransformationTypes } from './services/get-transformation-types'
 
-// Hooks (React)
+// Hooks (React) - Re-export from application layer
 export {
-  useCustomStyles,
-  useCustomStyle,
   useAllTransformationTypes,
+  // useRoomSpecifications, // TODO: implement if needed
+  // useFurnitureCatalog, // TODO: implement if needed
+  useCustomStyles,
   useCreateCustomStyle,
   useUpdateCustomStyle,
   useDeleteCustomStyle,
-} from './hooks/use-styles'
+} from '@/application/styles/use-styles'

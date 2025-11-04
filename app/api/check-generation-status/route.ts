@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { statusCheckLimiter, checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -7,12 +6,13 @@ import {
   validateRequest,
 } from "@/lib/validators/api-schemas";
 import { logger } from "@/lib/logger";
+import { withAuth, type AuthenticatedRequest } from "@/lib/api/middleware";
 
 /**
- * API route pour vérifier le statut d'une génération d'image NanoBanana
- * et récupérer l'image une fois qu'elle est prête
+ * Handler pour vérifier le statut d'une génération d'image NanoBanana
+ * ✅ Auth handled by middleware
  */
-export async function POST(request: NextRequest) {
+async function checkStatusHandler(request: AuthenticatedRequest) {
   let imageId: string | undefined;
 
   try {
@@ -33,27 +33,7 @@ export async function POST(request: NextRequest) {
 
     imageId = validation.data.imageId;
 
-    const supabase = await createClient();
-
-    // Vérifier l'authentification
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // ✅ EMAIL VERIFICATION: Vérifier que l'email est confirmé
-    if (!user.confirmed_at) {
-      return NextResponse.json(
-        {
-          error: "Email verification required",
-          message: "Please verify your email before checking generation status",
-        },
-        { status: 403 }
-      );
-    }
+    const { user, supabase } = request;
 
     // ✅ RATE LIMITING: Vérifier le rate limit par user ID
     const { success, limit, remaining, reset } = await checkRateLimit(
@@ -303,6 +283,7 @@ export async function POST(request: NextRequest) {
         throw new Error("Failed to update image status");
       }
 
+      // ✅ Credits already deducted by generate-image route
       logger.debug("🎉 Image generation completed!");
 
       return NextResponse.json({
@@ -346,3 +327,9 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * POST /api/check-generation-status
+ * ✅ Protected by auth middleware (requires email verification)
+ */
+export const POST = withAuth(checkStatusHandler, { requireEmailVerification: true });

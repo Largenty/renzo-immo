@@ -12,14 +12,36 @@ export type TransformationType =
 export type ImageStatus = "pending" | "processing" | "completed" | "failed";
 
 export type RoomType =
+  // Pièces de vie
   | "salon"
   | "cuisine"
-  | "chambre"
-  | "salle_de_bain"
   | "salle_a_manger"
+  // Chambres
+  | "chambre"
+  | "chambre_enfant"
+  // Pièces d'eau
+  | "salle_de_bain"
+  | "wc"
+  | "toilette"
+  // Travail et rangement
   | "bureau"
+  | "dressing"
+  | "buanderie"
+  // Circulation
   | "entree"
   | "couloir"
+  // Espaces extérieurs
+  | "terrasse"
+  | "balcon"
+  | "jardin"
+  | "veranda"
+  // Stockage
+  | "garage"
+  | "cave"
+  | "grenier"
+  // Spéciaux
+  | "mezzanine"
+  | "salle_de_jeux"
   | "autre";
 
 export interface ImagePair {
@@ -50,6 +72,11 @@ export interface Project {
   totalImages: number;
   completedImages: number;
   pendingImages: number;
+  // Showcase fields
+  slug?: string;
+  isPublic?: boolean;
+  viewCount?: number;
+  lastViewedAt?: Date;
 }
 
 export interface DashboardStats {

@@ -12,14 +12,36 @@ import { z } from 'zod'
 export type ImageStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
 export type RoomType =
+  // Pièces de vie
   | 'salon'
   | 'cuisine'
-  | 'chambre'
-  | 'salle_de_bain'
   | 'salle_a_manger'
+  // Chambres
+  | 'chambre'
+  | 'chambre_enfant'
+  // Pièces d'eau
+  | 'salle_de_bain'
+  | 'wc'
+  | 'toilette'
+  // Travail et rangement
   | 'bureau'
+  | 'dressing'
+  | 'buanderie'
+  // Circulation
   | 'entree'
   | 'couloir'
+  // Espaces extérieurs
+  | 'terrasse'
+  | 'balcon'
+  | 'jardin'
+  | 'veranda'
+  // Stockage
+  | 'garage'
+  | 'cave'
+  | 'grenier'
+  // Spéciaux
+  | 'mezzanine'
+  | 'salle_de_jeux'
   | 'autre'
 
 export interface Image {
@@ -37,6 +59,7 @@ export interface Image {
   roomWidth?: number  // Largeur de la pièce en mètres
   roomLength?: number // Longueur de la pièce en mètres
   roomArea?: number   // Surface en m²
+  strength?: number   // 🎚️ Intensité de la transformation IA (0-1, défaut: 0.15)
   errorMessage?: string
   metadata?: Record<string, any>
   processingStartedAt?: Date
@@ -61,14 +84,36 @@ export interface TransformImageResult {
 export const imageStatusSchema = z.enum(['pending', 'processing', 'completed', 'failed'])
 
 export const roomTypeSchema = z.enum([
+  // Pièces de vie
   'salon',
   'cuisine',
-  'chambre',
-  'salle_de_bain',
   'salle_a_manger',
+  // Chambres
+  'chambre',
+  'chambre_enfant',
+  // Pièces d'eau
+  'salle_de_bain',
+  'wc',
+  'toilette',
+  // Travail et rangement
   'bureau',
+  'dressing',
+  'buanderie',
+  // Circulation
   'entree',
   'couloir',
+  // Espaces extérieurs
+  'terrasse',
+  'balcon',
+  'jardin',
+  'veranda',
+  // Stockage
+  'garage',
+  'cave',
+  'grenier',
+  // Spéciaux
+  'mezzanine',
+  'salle_de_jeux',
   'autre',
 ])
 
@@ -85,7 +130,7 @@ export const imageSchema = z.object({
   roomType: roomTypeSchema.optional(),
   customRoom: z.string().max(200).optional(),
   errorMessage: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   processingStartedAt: z.date().optional(),
   processingCompletedAt: z.date().optional(),
   processingDurationMs: z.number().int().nonnegative().optional(),
@@ -109,6 +154,7 @@ export const uploadImageInputSchema = z.object({
   roomWidth: z.number().positive().max(100).optional(),   // 📏 Largeur en mètres (max 100m)
   roomLength: z.number().positive().max(100).optional(),  // 📏 Longueur en mètres (max 100m)
   roomArea: z.number().positive().max(10000).optional(),  // 📏 Surface en m² (max 10000m²)
+  strength: z.number().min(0).max(1).optional(),          // 🎚️ Intensité de la transformation IA (0-1, défaut: 0.15)
 })
 
 export const updateImageInputSchema = z.object({
@@ -126,6 +172,7 @@ export const regenerateImageInputSchema = z.object({
   withFurniture: z.boolean().optional(),
   furnitureIds: z.array(z.string().uuid()).optional(),
   roomType: roomTypeSchema.optional(),
+  strength: z.number().min(0).max(1).optional(), // 🎚️ Intensité de la transformation IA (0-1, défaut: 0.15)
 })
 
 // ============================================

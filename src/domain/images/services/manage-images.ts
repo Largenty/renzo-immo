@@ -67,12 +67,12 @@ export class ManageImagesService {
       status: 'pending',
       customPrompt: validatedInput.customPrompt,
       withFurniture: validatedInput.withFurniture,
-      furnitureIds: validatedInput.furnitureIds,
       roomType: validatedInput.roomType,
       customRoom: validatedInput.customRoom,
       roomWidth: validatedInput.roomWidth,   // 📏 Dimensions de la pièce
       roomLength: validatedInput.roomLength, // 📏 Dimensions de la pièce
       roomArea: validatedInput.roomArea,     // 📏 Dimensions de la pièce
+      strength: validatedInput.strength,     // 🎚️ Intensité de la transformation IA
     })
 
     return image

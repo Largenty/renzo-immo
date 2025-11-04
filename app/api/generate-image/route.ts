@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { generateImageLimiter, checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -8,6 +7,7 @@ import {
 } from "@/lib/validators/api-schemas";
 import { logger } from "@/lib/logger";
 import { buildPrompt, type RoomType } from "@/lib/prompts/prompt-builder";
+import { withAuth, withCredits, type CreditRequest } from "@/lib/api/middleware";
 
 // 🔧 CONSTANTS
 const NANOBANANA_IMAGE_TO_IMAGE_TYPE = "IMAGETOIAMGE"; // Typo intentionnelle de l'API NanoBanana
@@ -39,7 +39,11 @@ async function fetchWithTimeout(
   }
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * Handler for image generation
+ * ✅ Auth and credits handled by middleware
+ */
+async function generateImageHandler(request: CreditRequest) {
   let imageId: string | undefined;
 
   try {
@@ -60,28 +64,8 @@ export async function POST(request: NextRequest) {
 
     imageId = validation.data.imageId;
 
-    // Créer le client Supabase
-    const supabase = await createClient();
-
-    // Vérifier l'authentification
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // ✅ EMAIL VERIFICATION: Vérifier que l'email est confirmé
-    if (!user.confirmed_at) {
-      return NextResponse.json(
-        {
-          error: "Email verification required",
-          message: "Please verify your email before generating images",
-        },
-        { status: 403 }
-      );
-    }
+    // ✅ Auth and supabase already available from middleware
+    const { user, supabase } = request;
 
     // ✅ RATE LIMITING: Vérifier le rate limit par user ID
     const { success, limit, remaining, reset } = await checkRateLimit(
@@ -125,6 +109,15 @@ export async function POST(request: NextRequest) {
     if (image.projects.user_id !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+
+    // ✅ Credits are handled by middleware - add metadata for transaction
+    request.transactionMetadata = {
+      imageQuality: 'standard',
+      imageCount: 1,
+      relatedProjectId: image.project_id,
+      relatedProjectName: 'Image Generation',
+      relatedImageId: imageId,
+    };
 
     // Log des données essentielles (sans données sensibles)
     logger.debug("Image data from database", {
@@ -365,7 +358,7 @@ export async function POST(request: NextRequest) {
           type: NANOBANANA_IMAGE_TO_IMAGE_TYPE,
           image_size: imageSize, // Utilise le ratio détecté
           imageUrls: [image.original_url], // Array d'URLs d'images sources à transformer
-          strength: 0.58, // ✨ MAXIMUM PRESERVATION: Force le respect strict des dimensions architecturales
+          strength: image.strength ?? 0.15, // 🎚️ Intensité de la transformation IA (défaut: 0.15)
           callBackUrl: callbackUrl,
         }),
       }
@@ -507,7 +500,8 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to update image status");
     }
 
-    logger.debug("🎉 Image generation completed!");
+    // ✅ Credits automatically deducted by middleware
+    logger.debug("🎉 Image generation completed (synchronous mode)!");
 
     return NextResponse.json({
       success: true,
@@ -520,7 +514,7 @@ export async function POST(request: NextRequest) {
     // Mettre l'image en statut "failed" si quelque chose a échoué
     if (imageId) {
       try {
-        const supabase = await createClient();
+        const { supabase } = request;
 
         await supabase
           .from("images")
@@ -542,3 +536,17 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * POST /api/generate-image
+ * ✅ Protected by auth middleware (requires email verification)
+ * ✅ Protected by credits middleware (1 credit per image)
+ */
+export const POST = withAuth(
+  withCredits(generateImageHandler, {
+    creditCost: 1,
+    operation: 'generate-image',
+    useReservation: false, // Direct deduction after success
+  }),
+  { requireEmailVerification: true }
+);
