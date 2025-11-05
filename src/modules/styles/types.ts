@@ -85,9 +85,6 @@ export type CustomStyleValidated = z.infer<typeof customStyleSchema>
  * Représente les éléments de mobilier et leur catalogue
  */
 
-import { z } from 'zod'
-import type { RoomType } from './room-specification'
-
 // ============================================
 // TYPES
 // ============================================
@@ -206,7 +203,6 @@ export type StyleFurnitureVariantValidated = z.infer<typeof styleFurnitureVarian
  * Représente les spécifications d'un type de pièce
  */
 
-import { z } from 'zod'
 
 // ============================================
 // TYPES
@@ -310,7 +306,6 @@ export type RoomSpecificationValidated = z.infer<typeof roomSpecificationSchema>
  * Représente un style de transformation (système ou personnalisé)
  */
 
-import { z } from 'zod'
 import type { LucideIcon } from 'lucide-react'
 
 // ============================================
@@ -384,62 +379,16 @@ export const systemTransformationTypeSchema = z.enum([
   'style_personnalise',
 ])
 
-export const transformationTypeSchema = z.union([
+export const transformationTypeSlugSchema = z.union([
   systemTransformationTypeSchema,
   z.string().startsWith('custom_'),
 ])
 
-export const customStyleSchema = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid(),
-  slug: z.string().min(1),
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).nullable().optional(),
-  iconName: z.string().max(50).nullable().optional(),
-  category: z.string().max(50).nullable().optional(),
-  promptTemplate: z.string().max(5000).nullable().optional(),
-  exampleImageUrl: z.string().url().nullable().optional(),
-  allowFurnitureToggle: z.boolean(),
-  isSystem: z.boolean(),
-  isActive: z.boolean(),
-  isPublic: z.boolean(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-})
-
-// ============================================
-// SCHÉMAS D'ENTRÉE
-// ============================================
-
-export const createCustomStyleInputSchema = z.object({
-  name: z.string().min(1, 'Le nom est requis').max(100, 'Le nom est trop long'),
-  description: z.string().max(500).optional(),
-  iconName: z.string().max(50).optional(),
-  promptTemplate: z.string().max(5000).optional(),
-  allowFurnitureToggle: z.boolean().default(false),
-})
-
-export const updateCustomStyleInputSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  description: z.string().max(500).nullable().optional(),
-  iconName: z.string().max(50).nullable().optional(),
-  promptTemplate: z.string().max(5000).nullable().optional(),
-  allowFurnitureToggle: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-})
-
-// ============================================
-// TYPES INFÉRÉS
-// ============================================
-
-export type CreateCustomStyleInput = z.infer<typeof createCustomStyleInputSchema>
-export type UpdateCustomStyleInput = z.infer<typeof updateCustomStyleInputSchema>
 /**
  * Modèle du domaine : Transformation Type
  * Représente un type de transformation en base de données
  */
 
-import { z } from 'zod'
 
 // ============================================
 // TYPES
@@ -448,7 +397,7 @@ import { z } from 'zod'
 /**
  * Type de transformation depuis la base de données
  */
-export interface TransformationType {
+export interface TransformationTypeRecord {
   id: string
   slug: string
   displayNameFr: string
@@ -495,12 +444,6 @@ export type TransformationTypeValidated = z.infer<typeof transformationTypeSchem
  * Port : Styles Repository
  * Interface abstraite pour accéder aux styles de transformation
  */
-
-import type {
-  CustomStyle,
-  CreateCustomStyleInput,
-  UpdateCustomStyleInput,
-} from '../models/transformation-style'
 
 export interface IStylesRepository {
   /**

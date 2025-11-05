@@ -103,8 +103,8 @@ export const createRoomInputSchema = z.object({
   display_name_fr: z.string().min(1, 'Nom français requis').max(100),
   display_name_en: z.string().min(1, 'Nom anglais requis').max(100),
   constraints_text: z.string().min(10, 'Les contraintes doivent contenir au moins 10 caractères'),
-  typical_area_min: z.number().positive().optional(),
-  typical_area_max: z.number().positive().optional(),
+  typical_area_min: z.number().positive().optional().nullable(),
+  typical_area_max: z.number().positive().optional().nullable(),
   zones: z.record(z.string(), z.string()).optional(),
   description: z.string().max(500).optional(),
   icon_name: z.string().max(50).optional(),
@@ -114,8 +114,8 @@ export const updateRoomInputSchema = z.object({
   display_name_fr: z.string().min(1).max(100).optional(),
   display_name_en: z.string().min(1).max(100).optional(),
   constraints_text: z.string().min(10).optional(),
-  typical_area_min: z.number().positive().optional(),
-  typical_area_max: z.number().positive().optional(),
+  typical_area_min: z.number().positive().optional().nullable(),
+  typical_area_max: z.number().positive().optional().nullable(),
   zones: z.record(z.string(), z.string()).nullable().optional(),
   description: z.string().max(500).optional(),
   icon_name: z.string().max(50).optional(),
@@ -153,7 +153,6 @@ export const ROOM_TYPE_LABELS: Record<RoomType, { fr: string; en: string; icon: 
  * Définit le contrat que l'infrastructure doit respecter
  */
 
-import type { RoomSpecification, CreateRoomInput, UpdateRoomInput, RoomType } from '../models/room';
 
 export interface IRoomsRepository {
   /**

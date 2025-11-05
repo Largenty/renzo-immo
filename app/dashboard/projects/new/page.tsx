@@ -1,21 +1,11 @@
 "use client";
 
+import { Button, InfoCard, TipsList, Card } from "@/shared";
+import { NewProjectForm } from "@/modules/projects";
+import { useCurrentUser } from "@/modules/auth";
 import { useRouter } from "next/navigation";
-import { Button } from "@/presentation/shared/ui/button";
-import { useCreateProject } from "@/domain/projects";
-import { useCurrentUser } from "@/domain/auth";
 import Link from "next/link";
-import { ArrowLeft, Sparkles } from "lucide-react";
-import {
-  ProjectForm,
-  type ProjectFormData,
-} from "@/presentation/features/projects/project-form";
-import { InfoCard } from "@/presentation/features/dashboard/atoms/info-card";
-import { TipsList } from "@/presentation/features/dashboard/molecules/tips-list";
-import { logger } from "@/lib/logger";
-import { toast } from "sonner";
-import { AlertCircle } from "lucide-react";
-import { Card } from "@/presentation/shared/ui/card";
+import { ArrowLeft, Sparkles, AlertCircle } from "lucide-react";
 
 const projectTips = [
   {
@@ -32,46 +22,6 @@ const projectTips = [
 export default function NewProjectPage() {
   const router = useRouter();
   const { data: user, isLoading: isLoadingUser } = useCurrentUser();
-  const createProject = useCreateProject(user?.id);
-
-  const handleSubmit = async (
-    data: ProjectFormData,
-    coverImage: File | null
-  ) => {
-    if (!user?.id) {
-      logger.error("❌ No user ID");
-      toast.error("Vous devez être connecté pour créer un projet");
-      return;
-    }
-
-    logger.debug("🚀 Creating project...", {
-      name: data.name,
-      hasCover: !!coverImage,
-    });
-
-    const toastId = toast.loading("Création du projet...");
-
-    try {
-      await createProject.mutateAsync({
-        name: data.name,
-        address: data.address || undefined,
-        description: data.description || undefined,
-        coverImage: coverImage || undefined,
-      });
-
-      // ✅ Replace loading toast with success
-      toast.success("Projet créé avec succès", { id: toastId });
-      logger.debug("✅ Project created successfully");
-      logger.debug("📍 Redirecting to /dashboard/projects");
-
-      // ✅ Redirection seulement si succès (mutateAsync throw en cas d'erreur)
-      router.push("/dashboard/projects");
-    } catch (error) {
-      // ✅ Dismiss loading toast (l'erreur est déjà gérée par le hook avec toast)
-      toast.dismiss(toastId);
-      logger.error("❌ Error creating project:", error);
-    }
-  };
 
   // ✅ Loading skeleton pendant le chargement utilisateur
   if (isLoadingUser) {
@@ -113,9 +63,6 @@ export default function NewProjectPage() {
     );
   }
 
-  // ✅ Loading state simplifié (après early returns, isLoadingUser est toujours false)
-  const isSubmitting = createProject.isPending;
-
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       {/* Header */}
@@ -124,7 +71,6 @@ export default function NewProjectPage() {
           <Button
             variant="ghost"
             className="mb-4 text-slate-600 hover:text-slate-900"
-            disabled={isSubmitting}
           >
             <ArrowLeft size={16} className="mr-2" />
             Retour aux projets
@@ -139,11 +85,7 @@ export default function NewProjectPage() {
       </div>
 
       {/* Form */}
-      <ProjectForm
-        mode="create"
-        onSubmit={handleSubmit}
-        isLoading={isSubmitting}
-      />
+      <NewProjectForm />
 
       {/* Info Box */}
       <InfoCard
@@ -153,8 +95,8 @@ export default function NewProjectPage() {
         variant="blue"
       />
 
-      {/* Tips */}
-      <TipsList title="Conseils pour vos projets" tips={projectTips} />
+      {/* Tips section */}
+      <TipsList title="Conseils pour vos projets" tips={projectTips.map(t => t.text)} />
     </div>
   );
 }

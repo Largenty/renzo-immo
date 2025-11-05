@@ -125,7 +125,6 @@ export interface IProjectStorage {
  * Interface abstraite pour accéder aux projets
  */
 
-import type { Project, CreateProjectInput, UpdateProjectInput, ProjectStats } from '../models/project'
 
 export interface IProjectsRepository {
   /**

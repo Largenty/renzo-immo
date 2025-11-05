@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Button } from "@/presentation/shared/ui/button";
+import { Button } from "@/shared";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -17,10 +17,9 @@ import {
   Palette,
   Home,
 } from "lucide-react";
-import { LogoutModal } from "@/presentation/shared/modals/logout-modal";
-import { ErrorBoundary } from "@/presentation/shared/error-boundary";
-import { useCurrentUser } from "@/domain/auth";
-import { useCreditBalance } from "@/domain/credits";
+import { LogoutModal, ErrorBoundary } from "@/shared";
+import { useCurrentUser, signOut } from "@/modules/auth";
+import { useCreditBalance } from "@/modules/billing";
 import { logger } from '@/lib/logger';
 
 const navigation = [
@@ -169,14 +168,23 @@ export default function DashboardLayout({
 
         {/* Page content */}
         <main className="p-6 lg:p-8">
-          <ErrorBoundary>{children}</ErrorBoundary>
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
 
-      {/* Logout Modal */}
       <LogoutModal
-        isOpen={logoutModalOpen}
-        onClose={() => setLogoutModalOpen(false)}
+        open={logoutModalOpen}
+        onOpenChange={setLogoutModalOpen}
+        onConfirm={async () => {
+          try {
+            await signOut()
+            router.push('/auth/login')
+          } catch (error) {
+            logger.error('Logout error:', error)
+          }
+        }}
       />
     </div>
   );

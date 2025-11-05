@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Button } from '@/presentation/shared/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/presentation/shared/ui/card';
+import { Button } from '@/shared';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/shared';
 import { CheckCircle2, Loader2, XCircle, AlertCircle } from 'lucide-react';
-import { useCurrentUser } from '@/domain/auth';
-import { useCreditBalance } from '@/domain/credits';
+import { useCurrentUser } from '@/modules/auth';
+import { useCreditBalance } from '@/modules/billing';
 
 type VerificationStatus = 'verifying' | 'success' | 'error' | 'timeout';
 

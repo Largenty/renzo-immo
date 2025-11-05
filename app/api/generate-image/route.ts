@@ -4,9 +4,9 @@ import { generateImageLimiter, checkRateLimit } from "@/lib/rate-limit";
 import {
   generateImageRequestSchema,
   validateRequest,
-} from "@/lib/validators/api-schemas";
+} from "@/lib/validators/schemas";
 import { logger } from "@/lib/logger";
-import { buildPrompt, type RoomType } from "@/lib/prompts/prompt-builder";
+import { buildPrompt, type RoomType } from "@/modules/images/prompts/prompt-builder";
 import { withAuth, withCredits, type CreditRequest } from "@/lib/api/middleware";
 
 // 🔧 CONSTANTS
@@ -147,7 +147,7 @@ async function generateImageHandler(request: CreditRequest) {
     let sanitizedCustomPrompt: string | null = null;
     if (image.custom_prompt) {
       const { sanitizeAndValidatePrompt } = await import(
-        "@/lib/validators/prompt-sanitizer"
+        "@/modules/images/utils/prompt-sanitizer"
       );
       const promptValidation = sanitizeAndValidatePrompt(image.custom_prompt);
 

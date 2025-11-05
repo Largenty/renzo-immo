@@ -45,20 +45,23 @@ export interface AuthResult {
 
 export interface IAuthProvider {
   signUp(data: SignUpInput): Promise<User>
-  signIn(data: SignInInput): Promise<Session>
+  signIn(data: SignInInput): Promise<{ user: User; session: Session }>
   signOut(): Promise<void>
-  signInWithGoogle(): Promise<Session>
+  signInWithGoogle(): Promise<{ url: string }>
   getCurrentUser(): Promise<User | null>
+  getSession(): Promise<Session | null>
   updateUser(userId: string, data: UpdateUserInput): Promise<User>
   resetPassword(email: string): Promise<void>
   updatePassword(newPassword: string): Promise<void>
 }
 
 export interface IUsersRepository {
-  getById(id: string): Promise<User | null>
-  getByEmail(email: string): Promise<User | null>
-  update(id: string, data: Partial<User>): Promise<User>
-  delete(id: string): Promise<void>
+  getUserById(userId: string): Promise<User | null>
+  getUserByEmail(email: string): Promise<User | null>
+  createUser(user: Omit<User, 'createdAt' | 'updatedAt'>): Promise<User>
+  updateUser(userId: string, updates: UpdateUserInput): Promise<User>
+  updateLastLogin(userId: string): Promise<void>
+  updateCreditsBalance(userId: string, newBalance: number): Promise<void>
 }
 
 // ============================================

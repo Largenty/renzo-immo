@@ -1,35 +1,33 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCurrentUser } from "@/domain/auth";
-import { useProject, useDeleteProject } from "@/domain/projects";
-import { useProjectImages, useDeleteImage, useUploadImage, useGenerateImage } from "@/domain/images";
-import { useAllTransformationTypes } from "@/domain/styles";
-import { Card } from "@/presentation/shared/ui";
-import { ImageUploader } from "@/presentation/features/upload/image-uploader";
+import { useCurrentUser } from "@/modules/auth";
+import { useProject, useDeleteProject } from "@/modules/projects";
+import { useProjectImages, useDeleteImage, useUploadImage, useGenerateImage, ImagePollingHandler } from "@/modules/images";
+import { useAllTransformationTypes } from "@/modules/styles";
+import { Card, EmptyState, Button } from "@/shared";
+import { ImageUploader } from "@/modules/images";
 import { Upload } from "lucide-react";
 import type { RoomType } from "@/../types/dashboard";
-import type { Image as ImageType } from "@/domain/images";
+import type { Image as ImageType } from "@/modules/images";
 import { downloadImagesAsZip } from "@/lib/export-utils";
-import { ShareProjectDialog } from "@/presentation/features/projects/share-project-dialog";
+import { ShareProjectDialog } from "@/modules/projects";
 import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
-import { Button } from "@/presentation/shared/ui/button";
 import {
   ProjectHeader,
-  ProjectStats,
+  ProjectStatsComponent as ProjectStats,
   ImageFilters,
-  EmptyState,
   ProjectNotFound,
   ProjectLoadingSkeleton,
   ProjectCoverBanner,
-} from "@/presentation/features/projects";
-import { ImageGridCard } from "@/presentation/features/projects/molecules/image-grid-card";
-import { ImageViewerDialog } from "@/presentation/features/projects/molecules/image-viewer-dialog";
-import { DeleteConfirmDialog } from "@/presentation/features/projects/molecules/delete-confirm-dialog";
-import { DeleteProjectDialog } from "@/presentation/features/projects/molecules/delete-project-dialog";
+} from "@/modules/projects";
+import { ImageGridCard } from "@/modules/projects";
+import { ImageViewerDialog } from "@/modules/projects";
+import { ImageDeleteDialog } from "@/modules/projects";
+import { DeleteProjectDialog } from "@/modules/projects";
 import { logger } from '@/lib/logger';
 
 interface UploadedFile {
@@ -86,9 +84,8 @@ export default function ProjectDetailPage() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  // TODO: Implement proper polling for multiple images
-  // usePollingGenerationStatus is designed for single image polling
-  // For now, images are polled via API route checks
+  // ✅ Polling pour les images en cours de génération
+  // Les composants ImagePollingHandler s'occupent du polling automatique
 
   const filteredImages = useMemo(() => {
     return images.filter((img) => {
@@ -462,6 +459,11 @@ export default function ProjectDetailPage() {
         stats={stats}
       />
 
+      {/* Polling handlers pour les images en cours de génération */}
+      {images.filter(img => img.status === 'processing' && img.metadata?.nanobanana_task_id).map(img => (
+        <ImagePollingHandler key={img.id} imageId={img.id} taskId={img.metadata?.nanobanana_task_id} />
+      ))}
+
       {/* Images Grid */}
       {filteredImages.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -532,7 +534,7 @@ export default function ProjectDetailPage() {
       )}
 
       {/* Delete Image Confirmation */}
-      <DeleteConfirmDialog
+      <ImageDeleteDialog
         image={images.find((img) => img.id === deleteConfirmId) || null}
         transformationLabel={
           deleteConfirmId

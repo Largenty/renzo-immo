@@ -3,7 +3,7 @@
  * Vérifie si un utilisateur a assez de crédits
  */
 
-import type { CreditStats } from '../models/credit-transaction'
+import type { CreditStats } from '../types'
 
 /**
  * Vérifie si l'utilisateur a suffisamment de crédits

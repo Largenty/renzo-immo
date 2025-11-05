@@ -187,7 +187,6 @@ export type RegenerateImageInput = z.infer<typeof regenerateImageInputSchema>
  * Interface abstraite pour la génération d'images par IA
  */
 
-import type { TransformImageResult } from '../models/image'
 
 export interface GenerateImageInput {
   imageId: string
@@ -246,7 +245,6 @@ export interface IImageStorage {
  * Interface abstraite pour accéder aux images
  */
 
-import type { Image, UpdateImageInput, ImageStatus } from '../models/image'
 
 export interface IImagesRepository {
   /**

@@ -4,7 +4,7 @@ import { statusCheckLimiter, checkRateLimit } from "@/lib/rate-limit";
 import {
   checkStatusRequestSchema,
   validateRequest,
-} from "@/lib/validators/api-schemas";
+} from "@/lib/validators/schemas";
 import { logger } from "@/lib/logger";
 import { withAuth, type AuthenticatedRequest } from "@/lib/api/middleware";
 

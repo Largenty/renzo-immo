@@ -1,3 +1,3 @@
 // AI Infrastructure - Barrel Export
-export { NanoBananaAIGenerator } from './nanobanana.adapter';
-export { NanoBananaAIGeneratorClient } from './nanobanana-client.adapter';
+export { NanoBananaAIGenerator } from '../generation/nanobanana.adapter';
+export { NanoBananaAIGeneratorClient } from '../generation/nanobanana-client.adapter';

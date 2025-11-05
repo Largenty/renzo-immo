@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import { requireAdmin } from "@/lib/auth/check-admin";
 import { logAdminAction } from "@/lib/audit/log-admin-action";
 import { requireOwnerOrAdmin } from "@/lib/api/middleware/permissions";
-import { RoomsRepository } from "@/repositories/rooms.repository";
+import { RoomsRepository } from "@/modules/rooms";
 import {
   updateRoomInputSchema,
   type UpdateRoomInput,
-} from "@/domain/rooms/models/room";
+} from "@/modules/rooms";
 
 export const dynamic = "force-dynamic";
 
@@ -125,8 +126,9 @@ export async function PATCH(
 
     const input: UpdateRoomInput = validationResult.data;
 
-    // ✅ Utiliser le repository pour la mise à jour
-    const roomSpec = await roomsRepo.update(roomId, input);
+    // ✅ Utiliser le repository avec admin client pour la mise à jour (bypass RLS après vérification des permissions)
+    const adminRepo = new RoomsRepository(supabaseAdmin);
+    const roomSpec = await adminRepo.update(roomId, input);
 
     logger.info("[PATCH /api/rooms/[id]] Room updated", {
       userId: user.id,
@@ -202,8 +204,9 @@ export async function DELETE(
 
     const isDefaultRoom = existingRoom.user_id === null;
 
-    // ✅ Soft delete via repository (is_active = false)
-    await roomsRepo.update(roomId, { is_active: false });
+    // ✅ Soft delete via repository avec admin client (bypass RLS après vérification des permissions)
+    const adminRepo = new RoomsRepository(supabaseAdmin);
+    await adminRepo.update(roomId, { is_active: false });
 
     logger.info("[DELETE /api/rooms/[id]] Room deleted", {
       userId: user.id,

@@ -4,8 +4,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { IProjectsRepository } from '@/domain/projects/ports/projects-repository'
-import type { Project, UpdateProjectInput, ProjectStats } from '@/domain/projects/models/project'
+import type { IProjectsRepository } from '@/modules/projects'
+import type { Project, UpdateProjectInput, ProjectStats } from '@/modules/projects'
 
 /**
  * Type de la table Supabase projects

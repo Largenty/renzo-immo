@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { validatePassword } from '@/lib/validators/password-validator';
+import { validatePassword } from '@/modules/auth/utils/password-validator';
 
 export const dynamic = 'force-dynamic';
 

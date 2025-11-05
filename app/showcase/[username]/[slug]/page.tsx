@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import { ArrowLeft, ArrowRight, Loader2, X, Grid3x3, SlidersHorizontal } from "lucide-react";
-import { Button } from "@/presentation/shared/ui/button";
+import { Button } from "@/shared";
 
 interface TransformationType {
   name: string;

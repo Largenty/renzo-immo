@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { TrendingUp, ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useCurrentUser } from "@/domain/auth";
+import { useCurrentUser } from "@/modules/auth";
 import {
   useCreditStats,
   useCreditTransactions,
@@ -13,7 +13,7 @@ import {
   useWeeklyStats,
   useCreditPacks,
   type CreditTransaction,
-} from "@/domain/credits";
+} from "@/modules/credits";
 import {
   CreditsOverviewCard,
   StatsCard,
@@ -21,7 +21,7 @@ import {
   UsageHistoryTable,
   CreditsInfoCard,
   type UsageHistoryItem,
-} from "@/presentation/features/credits";
+} from "@/modules/credits";
 
 // ✅ Mapper les transactions vers UsageHistoryItem avec colonnes structurées
 function mapTransactionsToUsageHistory(
@@ -78,7 +78,7 @@ export default function CreditsPage() {
 
   // ✅ Récupérer les données optimisées
   const { data: stats, isLoading: statsLoading } = useCreditStats(user?.id);
-  const { data: balance, isLoading: balanceLoading } = useCreditBalance();
+  const { data: balance, isLoading: balanceLoading } = useCreditBalance(user?.id);
   const { data: weeklyStats, isLoading: weeklyStatsLoading } = useWeeklyStats(
     user?.id
   );

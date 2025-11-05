@@ -3,11 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logger'
 import { isUserAdmin } from '@/lib/auth/check-admin'
 import { logAdminAction } from '@/lib/audit/log-admin-action'
-import { RoomsRepository } from '@/repositories/rooms.repository'
+import { RoomsRepository } from '@/modules/rooms'
 import {
   createRoomInputSchema,
   type CreateRoomInput,
-} from '@/domain/rooms/models/room'
+} from '@/modules/rooms'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createCheckoutSession } from '@/lib/stripe';
+import { createCheckoutSession } from '@/modules/billing/api/checkout';
 import { logger } from '@/lib/logger';
 import { withAuth, type AuthenticatedRequest } from '@/lib/api/middleware';
 

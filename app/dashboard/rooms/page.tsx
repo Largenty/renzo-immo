@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { useCurrentUser } from "@/domain/auth";
-import { Card } from "@/presentation/shared/ui/card";
-import { Button } from "@/presentation/shared/ui/button";
+import { useCurrentUser } from "@/modules/auth";
+import { Card } from "@/shared";
+import { Button } from "@/shared";
 import {
   Plus,
   Home,
@@ -16,14 +16,14 @@ import {
   ChevronUp,
   AlertCircle,
 } from "lucide-react";
-import { Input } from "@/presentation/shared/ui/input";
-import { Badge } from "@/presentation/shared/ui/badge";
+import { Input } from "@/shared";
+import { Badge } from "@/shared";
 import { toast } from "sonner";
-import { useRoomsList, useDeleteRoom } from "@/domain/rooms/hooks/use-rooms";
-import { RoomFormDialog } from "@/presentation/features/rooms/room-form-dialog";
-import { RoomCard } from "@/presentation/features/rooms/room-card";
-import { DeleteConfirmDialog } from "@/presentation/shared/ui/delete-confirm-dialog";
-import type { RoomSpecification } from "@/domain/rooms/models/room";
+import { useRoomsList, useDeleteRoom } from "@/modules/rooms";
+import { RoomFormDialog } from "@/modules/rooms";
+import { RoomCard } from "@/modules/rooms";
+import { DeleteConfirmDialog } from "@/shared";
+import type { RoomSpecification } from "@/modules/rooms";
 import { logger } from "@/lib/logger";
 import { useRouter } from "next/navigation";
 

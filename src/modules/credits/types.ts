@@ -99,8 +99,6 @@ export function getPricePerCredit(priceCents: number, credits: number): string {
  * Représente une transaction de crédit (achat, utilisation, bonus, remboursement)
  */
 
-import { z } from 'zod'
-
 // ============================================
 // TYPES
 // ============================================
@@ -198,12 +196,6 @@ export type AddCreditsInput = z.infer<typeof addCreditsInputSchema>
  * (sera implémentée par un adapter Supabase dans infra/)
  */
 
-import type {
-  CreditTransaction,
-  CreditStats,
-  WeeklyStats,
-  CreateCreditTransactionInput,
-} from '../models/credit-transaction'
 
 /**
  * Type pour les filtres de transactions

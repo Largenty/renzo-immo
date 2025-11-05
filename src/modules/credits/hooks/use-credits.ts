@@ -8,13 +8,13 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { SupabaseCreditsRepository } from '@/infrastructure/supabase/credits.repository'
-import { ConsumeCreditsService } from '@/domain/credits/services/consume-credits'
-import { AddCreditsService } from '@/domain/credits/services/add-credits'
-import { GetCreditStatsService } from '@/domain/credits/services/get-credit-stats'
-import type { ConsumeCreditsInput, AddCreditsInput } from '@/domain/credits/models/credit-transaction'
-import type { TransactionTypeFilter } from '@/domain/credits/ports/credits-repository'
-import { InsufficientCreditsError } from '@/domain/credits/business-rules/validate-credit-balance'
+import { SupabaseCreditsRepository } from '@/modules/credits'
+import { ConsumeCreditsService } from '@/modules/credits'
+import { AddCreditsService } from '@/modules/credits'
+import { GetCreditStatsService } from '@/modules/credits'
+import type { ConsumeCreditsInput, AddCreditsInput } from '@/modules/credits'
+import type { TransactionTypeFilter } from '@/modules/credits'
+import { InsufficientCreditsError } from '@/modules/credits'
 
 /**
  * Hook : Récupérer les statistiques de crédits

@@ -3,19 +3,19 @@
 import { useState, useCallback } from "react";
 import { User, CreditCard, Shield, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useCurrentUser, useUpdateUser } from "@/domain/auth";
-import { SettingsTabs } from "@/presentation/features/dashboard/molecules/settings-tabs";
-import { validatePassword } from "@/lib/validators/password-validator";
+import { useCurrentUser, useUpdateUser } from "@/modules/auth";
+import { validatePassword } from "@/modules/auth/utils/password-validator";
 import { logger } from "@/lib/logger";
-import { Card } from "@/presentation/shared/ui/card";
-import { Button } from "@/presentation/shared/ui/button";
-import { useRouter } from "next/navigation";
 import {
+  Card,
+  Button,
+  SettingsTabs,
   ProfileSettingsSection,
-  type ProfileFormData,
-} from "@/presentation/features/dashboard/organisms/profile-settings-section";
-import { AccountSettingsSection } from "@/presentation/features/dashboard/organisms/account-settings-section";
-import { BillingSettingsSection } from "@/presentation/features/dashboard/organisms/billing-settings-section";
+  AccountSettingsSection,
+  BillingSettingsSection,
+  type ProfileFormData
+} from "@/shared";
+import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -235,10 +235,8 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Tabs */}
       <SettingsTabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Profile Tab */}
       {activeTab === "profile" && (
         <>
           {user && (
@@ -258,7 +256,6 @@ export default function SettingsPage() {
         </>
       )}
 
-      {/* Account Tab */}
       {activeTab === "account" && (
         <AccountSettingsSection
           currentEmail={user?.email}
@@ -268,7 +265,6 @@ export default function SettingsPage() {
         />
       )}
 
-      {/* Billing Tab */}
       {activeTab === "billing" && (
         <BillingSettingsSection
           onChangePlan={handleChangePlan}

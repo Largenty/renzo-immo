@@ -3,7 +3,7 @@
  * Implémente IProjectStorage
  */
 
-import type { IProjectStorage } from '@/domain/projects/ports/project-storage'
+import type { IProjectStorage } from '@/modules/projects'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 

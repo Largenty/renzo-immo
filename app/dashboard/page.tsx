@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, PageHeader, StatCard } from "@/presentation/shared/ui";
-import { ProjectCard, EmptyState } from "@/presentation/features/projects";
+import { Button, PageHeader, StatCard, EmptyState } from "@/shared";
+import { ProjectCard } from "@/modules/projects";
 import Link from "next/link";
 import {
   FolderOpen,
@@ -12,12 +12,12 @@ import {
   Sparkles,
   AlertCircle,
 } from "lucide-react";
-import { useProjects } from "@/domain/projects";
-import { useCreditStats } from "@/domain/credits";
-import { useCurrentUser } from "@/domain/auth";
+import { useProjects } from "@/modules/projects";
+import { useCreditStats } from "@/modules/credits";
+import { useCurrentUser } from "@/modules/auth";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/presentation/shared/ui/card";
+import { Card } from "@/shared";
 
 // ✅ Helper: Format date to ISO string
 const formatDate = (date: Date | string): string => {

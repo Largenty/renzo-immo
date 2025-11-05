@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCurrentUser, useSignOut } from "@/domain/auth";
+import { useCurrentUser, useSignOut } from "@/modules/auth";
 import { createClient } from "@/lib/supabase/client";
-import { AuthCard, AuthLoading } from "@/presentation/features/auth";
-import { Button } from "@/presentation/shared/ui/button";
+import { AuthCard, AuthLoading } from "@/modules/auth";
+import { Button } from "@/shared";
 import { Mail, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 

@@ -9,12 +9,12 @@ import type {
   CreditStats,
   WeeklyStats,
   CreateCreditTransactionInput,
-} from '@/domain/credits/models/credit-transaction'
+} from '@/modules/credits'
 import type {
   ICreditsRepository,
   PaginatedTransactions,
   TransactionTypeFilter,
-} from '@/domain/credits/ports/credits-repository'
+} from '@/modules/credits'
 
 /**
  * Type de la table Supabase credit_transactions

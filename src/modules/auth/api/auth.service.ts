@@ -4,8 +4,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { IAuthProvider } from '@/domain/auth/ports/auth-provider'
-import type { User, Session, SignUpInput, SignInInput, UpdateUserInput } from '@/domain/auth/models/user'
+import type { IAuthProvider } from '@/modules/auth'
+import type { User, Session, SignUpInput, SignInInput, UpdateUserInput } from '@/modules/auth'
 
 /**
  * Mapper : Supabase User → Domain User
@@ -48,7 +48,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 
   async signUp(input: SignUpInput): Promise<User> {
     // ✅ VALIDATION MOT DE PASSE: Vérifier la force du mot de passe AVANT de créer le compte
-    const { validatePassword } = await import('@/lib/validators/password-validator')
+    const { validatePassword } = await import('../utils/password-validator')
     const passwordValidation = validatePassword(input.password)
 
     if (!passwordValidation.valid) {
@@ -233,4 +233,56 @@ export class SupabaseAuthProvider implements IAuthProvider {
 
     return mapSupabaseUserToDomain(authUser, userData)
   }
+
+  async updatePassword(newPassword: string): Promise<void> {
+    const { error } = await this.supabase.auth.updateUser({
+      password: newPassword,
+    })
+
+    if (error) {
+      throw new Error(`Failed to update password: ${error.message}`)
+    }
+  }
+}
+
+// Helper functions for direct use
+import { createClient } from '@/lib/supabase/client'
+
+export async function login(email: string, password: string) {
+  const supabase = createClient()
+  return await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+}
+
+export async function signup(email: string, password: string) {
+  const supabase = createClient()
+  return await supabase.auth.signUp({
+    email,
+    password,
+  })
+}
+
+export async function signOut() {
+  const supabase = createClient()
+  const { error } = await supabase.auth.signOut()
+  if (error) {
+    throw new Error(`Failed to sign out: ${error.message}`)
+  }
+}
+
+export async function resetPasswordRequest(email: string) {
+  const supabase = createClient()
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  return await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/reset-password`,
+  })
+}
+
+export async function updatePassword(newPassword: string) {
+  const supabase = createClient()
+  return await supabase.auth.updateUser({
+    password: newPassword,
+  })
 }

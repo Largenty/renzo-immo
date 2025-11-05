@@ -1,0 +1,18 @@
+'use client'
+
+import { AlertCircle } from 'lucide-react'
+
+interface FormErrorProps {
+  message?: string | null
+}
+
+export function FormError({ message }: FormErrorProps) {
+  if (!message) return null
+
+  return (
+    <div className="rounded-md bg-red-50 border border-red-200 p-4 flex items-start gap-3" role="alert">
+      <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+      <p className="text-sm text-red-800">{message}</p>
+    </div>
+  )
+}

@@ -13,7 +13,7 @@
 import { NextResponse } from 'next/server'
 import { logger } from '@/lib/logger'
 import type { AuthenticatedRequest } from './auth'
-import { SupabaseCreditsRepository } from '@/infrastructure/supabase/credits.repository'
+import { SupabaseCreditsRepository } from '@/modules/credits'
 
 /**
  * Credit operation request with credit cost

@@ -1,26 +1,26 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Card } from "@/presentation/shared/ui/card";
-import { Button } from "@/presentation/shared/ui/button";
-import { Input } from "@/presentation/shared/ui/input";
+import { Card } from "@/shared";
+import { Button } from "@/shared";
+import { Input } from "@/shared";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/presentation/shared/ui/select";
+} from "@/shared";
 import Link from "next/link";
 import { toast } from "sonner";
-import { useCurrentUser } from "@/domain/auth";
+import { useCurrentUser } from "@/modules/auth";
 import {
   useCreditStats,
   useCreditTransactionsPaginated,
   useExportTransactions,
   type TransactionTypeFilter,
-} from "@/domain/credits";
-import type { CreditTransaction } from "@/domain/credits/models/credit-transaction";
+} from "@/modules/credits";
+import type { CreditTransaction } from "@/modules/credits";
 import {
   ArrowLeft,
   Search,

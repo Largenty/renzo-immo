@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { Toaster } from "sonner";
-import { AuthProvider } from "@/presentation/shared/providers/auth-provider";
-import { QueryProvider } from "@/presentation/shared/providers/query-provider";
+import { AuthProvider } from "@/shared";
+import { QueryProvider } from "@/shared";
 import {
   SEO_CONFIG,
   JSON_LD_ORGANIZATION,
   JSON_LD_PRODUCT,
 } from "@/config/seo";
-import { ConditionalLayout } from "@/presentation/shared/layout/conditional-layout";
-import { ErrorBoundary } from "@/presentation/shared/error-boundary";
+import { ConditionalLayout, ErrorBoundary } from "@/shared";
 import { logger } from "@/lib/logger";
 import "./globals.css";
 

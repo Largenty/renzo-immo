@@ -7,7 +7,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { useEffect, useState } from "react";
-import { Button } from "@/presentation/shared/ui/button";
+import { Button } from "@/shared";
 import { logger } from "@/lib/logger";
 
 export default function GlobalError({

@@ -6,8 +6,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { logger } from '@/lib/logger';
-import type { CreditPack, CreditPackDTO } from '@/domain/credits/models/credit-pack';
-import { fromCreditPackDTO } from '@/domain/credits/models/credit-pack';
+import type { CreditPack, CreditPackDTO } from '@/modules/credits';
+import { fromCreditPackDTO } from '@/modules/credits';
 
 /**
  * Hook : Récupérer les packs de crédits disponibles

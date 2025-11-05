@@ -8,7 +8,7 @@ import {
   handleCheckoutSessionCompleted,
   handlePaymentFailed,
   handleChargeRefunded,
-} from '@/lib/stripe';
+} from '@/modules/billing/api';
 import { logger } from '@/lib/logger';
 import type Stripe from 'stripe';
 

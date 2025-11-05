@@ -1,35 +1,39 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { useCurrentUser } from "@/domain/auth";
+import { useCurrentUser } from "@/modules/auth";
 import {
   useCustomStyles,
   useCreateCustomStyle,
   useUpdateCustomStyle,
   useDeleteCustomStyle,
-} from "@/domain/styles";
-import { Button } from "@/presentation/shared/ui/button";
+  PageHeaderWithAction,
+  SearchInput,
+  StyleCard,
+  StyleFormDialog,
+} from "@/modules/styles";
+import { Button } from "@/shared";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/presentation/shared/ui/dialog";
+} from "@/shared";
 import { Plus, Loader2, AlertCircle } from "lucide-react";
-import { Skeleton } from "@/presentation/shared/ui/skeleton";
-import { Card } from "@/presentation/shared/ui/card";
+import { Skeleton } from "@/shared";
+import { Card } from "@/shared";
 import { toast } from "sonner";
-import {
-  PageHeaderWithAction,
-  SearchInput,
-  StyleCard,
-  StyleFormDialog,
-  type StyleFormData,
-} from "@/presentation/features/dashboard";
-import { EmptyState } from "@/presentation/features/projects";
+import { EmptyState } from "@/shared";
 import { logger } from "@/lib/logger";
 import { useRouter } from "next/navigation";
+
+// Type pour le formulaire de style
+interface StyleFormData {
+  name: string;
+  description: string;
+  allowFurnitureToggle: boolean;
+}
 
 // Type pour le style en édition
 interface EditingStyle {
@@ -67,74 +71,79 @@ export default function StylesPage() {
   }, [styles, searchQuery]);
 
   // ✅ Memoize: Handle create with loading toast
-  const handleCreate = useCallback(async (data: StyleFormData) => {
-    if (!user?.id) {
-      toast.error("Vous devez être connecté pour créer un style");
-      return;
-    }
+  const handleCreate = useCallback(
+    async (data: StyleFormData) => {
+      if (!user?.id) {
+        toast.error("Vous devez être connecté pour créer un style");
+        return;
+      }
 
-    const toastId = toast.loading("Création du style...");
+      const toastId = toast.loading("Création du style...");
 
-    try {
-      await createStyleMutation.mutateAsync({
-        name: data.name,
-        description: data.description || undefined,
-        iconName: data.iconName,
-        promptTemplate: data.promptTemplate || undefined,
-        allowFurnitureToggle: data.allowFurniture,
-      });
+      try {
+        await createStyleMutation.mutateAsync({
+          name: data.name,
+          description: data.description || undefined,
+          allowFurnitureToggle: data.allowFurnitureToggle,
+        });
 
-      toast.success("Style créé avec succès", {
-        id: toastId,
-        description: `Le style "${data.name}" a été créé`,
-      });
+        toast.success("Style créé avec succès", {
+          id: toastId,
+          description: `Le style "${data.name}" a été créé`,
+        });
 
-      setFormDialogOpen(false);
-    } catch (error) {
-      logger.error("Error creating style:", error);
-      toast.error("Erreur lors de la création du style", {
-        id: toastId,
-        description: error instanceof Error ? error.message : "Une erreur est survenue",
-      });
-    }
-  }, [user?.id, createStyleMutation]);
+        setFormDialogOpen(false);
+      } catch (error) {
+        logger.error("Error creating style:", error);
+        toast.error("Erreur lors de la création du style", {
+          id: toastId,
+          description:
+            error instanceof Error ? error.message : "Une erreur est survenue",
+        });
+      }
+    },
+    [user?.id, createStyleMutation]
+  );
 
   // ✅ Memoize: Handle update with loading toast
-  const handleUpdate = useCallback(async (data: StyleFormData) => {
-    if (!editingStyle) return;
+  const handleUpdate = useCallback(
+    async (data: StyleFormData) => {
+      if (!editingStyle) return;
 
-    const toastId = toast.loading("Mise à jour du style...");
+      const toastId = toast.loading("Mise à jour du style...");
 
-    try {
-      await updateStyleMutation.mutateAsync({
-        styleId: editingStyle.id,
-        name: data.name,
-        description: data.description || null,
-        iconName: data.iconName,
-        promptTemplate: data.promptTemplate || null,
-        allowFurnitureToggle: data.allowFurniture,
-      });
+      try {
+        await updateStyleMutation.mutateAsync({
+          styleId: editingStyle.id,
+          name: data.name,
+          description: data.description || null,
+          allowFurnitureToggle: data.allowFurnitureToggle,
+        });
 
-      toast.success("Style mis à jour avec succès", {
-        id: toastId,
-        description: `Le style "${data.name}" a été mis à jour`,
-      });
+        toast.success("Style mis à jour avec succès", {
+          id: toastId,
+          description: `Le style "${data.name}" a été mis à jour`,
+        });
 
-      setEditingStyle(null);
-    } catch (error) {
-      logger.error("Error updating style:", error);
-      toast.error("Erreur lors de la mise à jour du style", {
-        id: toastId,
-        description: error instanceof Error ? error.message : "Une erreur est survenue",
-      });
-    }
-  }, [editingStyle, updateStyleMutation]);
+        setEditingStyle(null);
+      } catch (error) {
+        logger.error("Error updating style:", error);
+        toast.error("Erreur lors de la mise à jour du style", {
+          id: toastId,
+          description:
+            error instanceof Error ? error.message : "Une erreur est survenue",
+        });
+      }
+    },
+    [editingStyle, updateStyleMutation]
+  );
 
   // ✅ Memoize: Handle delete with loading toast
   const handleDelete = useCallback(async () => {
     if (!deleteConfirmId) return;
 
-    const styleName = styles.find(s => s.id === deleteConfirmId)?.name || "ce style";
+    const styleName =
+      styles.find((s) => s.id === deleteConfirmId)?.name || "ce style";
     const toastId = toast.loading("Suppression en cours...");
 
     try {
@@ -150,7 +159,10 @@ export default function StylesPage() {
       logger.error("Error deleting style:", error);
       toast.error("Erreur lors de la suppression", {
         id: toastId,
-        description: error instanceof Error ? error.message : "Impossible de supprimer le style",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Impossible de supprimer le style",
       });
     }
   }, [deleteConfirmId, deleteStyleMutation, styles]);
@@ -169,9 +181,9 @@ export default function StylesPage() {
   // ✅ Loading state pour utilisateur
   if (isLoadingUser) {
     return (
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="mx-auto max-w-7xl space-y-8">
         <Skeleton className="h-20 w-full" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <Skeleton key={i} className="h-48 w-full" />
           ))}
@@ -183,13 +195,13 @@ export default function StylesPage() {
   // ✅ Gestion du cas utilisateur non connecté
   if (!user) {
     return (
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl">
         <Card className="p-12 text-center">
-          <AlertCircle className="mx-auto text-red-500 mb-4" size={48} />
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">
+          <AlertCircle className="mx-auto mb-4 text-red-500" size={48} />
+          <h3 className="mb-2 text-lg font-semibold text-slate-900">
             Non authentifié
           </h3>
-          <p className="text-slate-600 mb-4">
+          <p className="mb-4 text-slate-600">
             Vous devez être connecté pour accéder aux styles personnalisés.
           </p>
           <Button onClick={() => router.push("/auth/login")} variant="outline">
@@ -203,9 +215,9 @@ export default function StylesPage() {
   // ✅ Loading state pour styles
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="mx-auto max-w-7xl space-y-8">
         <Skeleton className="h-20 w-full" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <Skeleton key={i} className="h-48 w-full" />
           ))}
@@ -217,13 +229,13 @@ export default function StylesPage() {
   // ✅ Error state
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto">
-        <Card className="p-12 text-center bg-red-50 border-red-200">
-          <AlertCircle className="mx-auto text-red-500 mb-4" size={48} />
-          <h3 className="text-lg font-semibold text-red-900 mb-2">
+      <div className="mx-auto max-w-7xl">
+        <Card className="border-red-200 bg-red-50 p-12 text-center">
+          <AlertCircle className="mx-auto mb-4 text-red-500" size={48} />
+          <h3 className="mb-2 text-lg font-semibold text-red-900">
             Erreur de chargement
           </h3>
-          <p className="text-red-700 mb-4">
+          <p className="mb-4 text-red-700">
             {error instanceof Error ? error.message : "Une erreur est survenue"}
           </p>
           <Button
@@ -239,7 +251,7 @@ export default function StylesPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="mx-auto max-w-7xl space-y-8">
       <PageHeaderWithAction
         title="Styles personnalisés"
         description="Créez et gérez vos propres styles de transformation"
@@ -262,23 +274,24 @@ export default function StylesPage() {
 
       {filteredStyles.length === 0 ? (
         searchQuery ? (
-          <div className="text-center py-12">
+          <div className="py-12 text-center">
             <p className="text-slate-600">
               Aucun style ne correspond à &quot;{searchQuery}&quot;
             </p>
           </div>
         ) : (
           <EmptyState
+            icon={Plus}
             title="Aucun style personnalisé"
-            description="Créez votre premier style pour commencer"
+            description="Créez votre premier style pour transformer vos images selon vos préférences"
             action={{
               label: "Créer un style",
-              onClick: openCreateDialog
+              onClick: openCreateDialog,
             }}
           />
         )
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredStyles.map((style) => (
             <StyleCard
               key={style.id}
@@ -303,33 +316,31 @@ export default function StylesPage() {
           }
         }}
         onSubmit={editingStyle ? handleUpdate : handleCreate}
-        initialData={
+        style={
           editingStyle
             ? {
                 name: editingStyle.name,
                 description: editingStyle.description || "",
-                iconName: editingStyle.iconName || "Sparkles",
-                promptTemplate: editingStyle.promptTemplate || "",
-                allowFurniture: editingStyle.allowFurnitureToggle,
+                allowFurnitureToggle: editingStyle.allowFurnitureToggle,
               }
-            : undefined
+            : null
         }
-        title={editingStyle ? "Modifier le style" : "Créer un style"}
-        description={
-          editingStyle
-            ? "Modifiez les paramètres de votre style personnalisé"
-            : "Créez un nouveau style de transformation personnalisé"
+        isSubmitting={
+          createStyleMutation.isPending || updateStyleMutation.isPending
         }
-        isLoading={createStyleMutation.isPending || updateStyleMutation.isPending}
       />
 
       {/* Delete Confirmation */}
-      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+      <Dialog
+        open={!!deleteConfirmId}
+        onOpenChange={() => setDeleteConfirmId(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirmer la suppression</DialogTitle>
             <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer ce style ? Cette action est irréversible.
+              Êtes-vous sûr de vouloir supprimer ce style ? Cette action est
+              irréversible.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
